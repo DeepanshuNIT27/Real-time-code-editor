@@ -10,7 +10,7 @@ const Editor = () => {
     <div style={{ height: "100%", width: "100%" }}>
       <CodeMirror
         value={value}
-        height="500px"
+        height="100vh"
         theme={dracula}
         extensions={[javascript()]}
         onChange={(val) => setValue(val)}
