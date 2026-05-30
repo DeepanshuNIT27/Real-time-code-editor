@@ -46,7 +46,7 @@ const Home = () => {
           alt="code-sync-logo"
         />
 
-        <h4 className="mainlabel">Paste invitation ROOM ID</h4>
+        <h4 className="mainLabel">Paste invitation ROOM ID</h4>
 
         <div className="inputGroup">
           <input
