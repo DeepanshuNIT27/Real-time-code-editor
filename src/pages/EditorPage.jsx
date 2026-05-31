@@ -31,6 +31,9 @@ const EditorPage = () => {
     const init = async () => {
       socketRef.current = await initSocket();
 
+       console.log("BACKEND URL:", import.meta.env.VITE_BACKEND_URL);  /// YE LINE 
+       console.log("Socket ID:", socketRef.current.id); // YE LINE ADD KIYA HU
+
       // Handle socket errors
       function handleErrors(err) {
         console.log("socket error", err);
@@ -47,17 +50,45 @@ const EditorPage = () => {
         username: location.state?.username,
       });
 
+      /// YE BHI NEW ADD KIYA HU DEKH LENA 
+      console.log("JOIN emitted:", {
+        roomId,
+        username: location.state?.username,
+      });
+
       // Listening for joined event
+      // socketRef.current.on(
+      //   ACTIONS.JOINED,
+      //   ({ clients, username, socketId }) => {
+      //     if (username !== location.state?.username) {
+      //       toast.success(`${username} joined the room.`);
+      //       console.log(`${username} joined`);
+      //     }
+
+      //    setClients([...clients]);
+      //     // Sync code with newly joined user
+      //     socketRef.current.emit(ACTIONS.SYNC_CODE, {
+      //       code: codeRef.current,
+      //       socketId,
+      //     });
+      //   },
+      // );
+
       socketRef.current.on(
         ACTIONS.JOINED,
         ({ clients, username, socketId }) => {
+          console.log("JOINED EVENT");
+          console.log("clients =>", clients);
+          console.log("username =>", username);
+          console.log("socketId =>", socketId);
+
           if (username !== location.state?.username) {
             toast.success(`${username} joined the room.`);
             console.log(`${username} joined`);
           }
 
-         setClients([...clients]);
-          // Sync code with newly joined user
+          setClients([...clients]);
+
           socketRef.current.emit(ACTIONS.SYNC_CODE, {
             code: codeRef.current,
             socketId,
@@ -105,7 +136,7 @@ const EditorPage = () => {
   if (!location.state) {
     return <Navigate to="/" />;
   }
-
+    console.log("Current Clients State:", clients);    // ye v temp add hua hai 
   return (
     <div className="mainWrap">
       <div className="aside">

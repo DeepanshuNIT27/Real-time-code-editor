@@ -8,5 +8,20 @@ export const initSocket = async () => {
     transports: ["websocket"],
   };
 
-  return io(import.meta.env.VITE_BACKEND_URL, options);
+
+  return new Promise((resolve, reject) => { 
+    const socket = io(import.meta.env.VITE_BACKEND_URL, options);
+
+    // Only resolve after socket is truly connected
+    socket.on("connect", () => {
+      console.log("Socket truly connected:", socket.id);
+      resolve(socket);
+    });
+
+    // Reject on connection error
+    socket.on("connect_error", (err) => {
+      console.error("Connection error:", err);
+      reject(err);
+    });
+  });
 };

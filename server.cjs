@@ -5,7 +5,7 @@ const app = express();
 const http = require("http");
 const path = require("path");
 const { Server } = require("socket.io");
-const ACTIONS = require("./src/Actions");
+const ACTIONS = require("./src/Actions.cjs");
 
 const server = http.createServer(app);
 
@@ -40,16 +40,26 @@ function getAllConnectedClients(roomId) {
 }
 
 // Socket connection
+
 io.on("connection", (socket) => {
-  console.log("socket connected", socket.id);
+  console.log("SOCKET CONNECTED:", socket.id); 
 
   // Join room
-  socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
+
+ 
+
+  socket.on(ACTIONS.JOIN, ({ roomId, username }) => {  
+    console.log("JOIN RECEIVED");
+    console.log("roomId:", roomId);
+    console.log("username:", username);
+
     userSocketMap[socket.id] = username;
 
     socket.join(roomId);
 
     const clients = getAllConnectedClients(roomId);
+
+    console.log("clients in room:", clients);
 
     // Emit joined event to all clients in room
     clients.forEach(({ socketId }) => {
