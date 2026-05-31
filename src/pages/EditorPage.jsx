@@ -56,23 +56,6 @@ const EditorPage = () => {
         username: location.state?.username,
       });
 
-      // Listening for joined event
-      // socketRef.current.on(
-      //   ACTIONS.JOINED,
-      //   ({ clients, username, socketId }) => {
-      //     if (username !== location.state?.username) {
-      //       toast.success(`${username} joined the room.`);
-      //       console.log(`${username} joined`);
-      //     }
-
-      //    setClients([...clients]);
-      //     // Sync code with newly joined user
-      //     socketRef.current.emit(ACTIONS.SYNC_CODE, {
-      //       code: codeRef.current,
-      //       socketId,
-      //     });
-      //   },
-      // );
 
       socketRef.current.on(
         ACTIONS.JOINED,
@@ -136,7 +119,7 @@ const EditorPage = () => {
   if (!location.state) {
     return <Navigate to="/" />;
   }
-    console.log("Current Clients State:", clients);    // ye v temp add hua hai 
+
   return (
     <div className="mainWrap">
       <div className="aside">
@@ -167,6 +150,7 @@ const EditorPage = () => {
 
       <div className="editorWrap">
         {/* Code editor */}
+        {socketRef.current && (
         <Editor
           socketRef={socketRef}
           roomId={roomId}
@@ -174,6 +158,7 @@ const EditorPage = () => {
             codeRef.current = code;
           }}
         />
+        )}
       </div>
     </div>
   );

@@ -31,36 +31,38 @@ const Editor = ({ socketRef, roomId, onCodeChange }) => {
 
         // Avoiding infinite loop while syncing code
         if (origin !== "setValue") {
+          if(socketRef.current){
           socketRef.current.emit(ACTIONS.CODE_CHANGE, {
             roomId,
             code,
           });
         }
+      }
       });
+
+      //  CODE_CHANGE listener — editor init hone ke BAAD 
+      if(socketRef.current){
+      socketRef.current.on(ACTIONS.CODE_CHANGE, ({ code }) => {
+        if (code !== null && code !== undefined) {
+          editorRef.current.setValue(code);
+        }
+      });
+    }
     }
 
     init();
 
+   
+    // export default Editor;
+
+    //  Cleanup
     return () => {
+      socketRef.current?.off(ACTIONS.CODE_CHANGE);
       if (editorRef.current) {
         editorRef.current.toTextArea();
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (socketRef.current) {
-      socketRef.current.on(ACTIONS.CODE_CHANGE, ({ code }) => {
-        if (code !== null) {
-          editorRef.current.setValue(code);
-        }
-      });
-    }
-
-    return () => {
-      socketRef.current?.off(ACTIONS.CODE_CHANGE);
-    };
-  }, [socketRef]);
 
   return <textarea id="realtimeEditor"></textarea>;
 };
