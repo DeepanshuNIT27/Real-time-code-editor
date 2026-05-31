@@ -4,6 +4,8 @@ import toast from "react-hot-toast";
 import ACTIONS from "../Actions.js";
 import Client from "../components/Client.jsx";
 import Editor from "../components/Editor.jsx";
+import LanguageSelector from "../components/LanguageSelector.jsx";
+import Output from "../components/Output.jsx";
 import { initSocket } from "../socket.js";
 
 import {
@@ -25,6 +27,13 @@ const EditorPage = () => {
 
   // Connected clients state
   const [clients, setClients] = useState([]);
+
+  
+  // localStorage se load karo
+const [selectedLanguage, setSelectedLanguage] = useState(() => {
+  const saved = localStorage.getItem(`language-${roomId}`);
+  return saved ? Number(saved) : 71; // default Python (71)
+});
 
   useEffect(() => {
     // Initialize socket connection
@@ -112,6 +121,8 @@ const EditorPage = () => {
 
   // Leave room
   function leaveRoom() {
+    localStorage.removeItem(`code-${roomId}`);
+    localStorage.removeItem(`language-${roomId}`);
     reactNavigator("/");
   }
 
@@ -149,16 +160,27 @@ const EditorPage = () => {
       </div>
 
       <div className="editorWrap">
-        {/* Code editor */}
-        {socketRef.current && (
-        <Editor
-          socketRef={socketRef}
-          roomId={roomId}
-          onCodeChange={(code) => {
-            codeRef.current = code;
+        {/*  Language dropdown */}
+        <LanguageSelector
+          selectedLanguage={selectedLanguage}
+          onLanguageChange={(lang) => {
+            setSelectedLanguage(lang);
+            localStorage.setItem(`language-${roomId}`, lang); //  save karo
           }}
         />
+        {/* Code editor */}
+        {socketRef.current && (
+          <Editor
+            socketRef={socketRef}
+            roomId={roomId}
+            onCodeChange={(code) => {
+              codeRef.current = code;
+            }}
+          />
         )}
+
+        {/*Input/Output box */}
+        <Output getCode={() => codeRef.current} languageId={selectedLanguage} />
       </div>
     </div>
   );
