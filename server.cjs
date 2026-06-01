@@ -42,13 +42,11 @@ function getAllConnectedClients(roomId) {
 // Socket connection
 
 io.on("connection", (socket) => {
-  console.log("SOCKET CONNECTED:", socket.id); 
+  console.log("SOCKET CONNECTED:", socket.id);
 
   // Join room
 
- 
-
-  socket.on(ACTIONS.JOIN, ({ roomId, username }) => {  
+  socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
     console.log("JOIN RECEIVED");
     console.log("roomId:", roomId);
     console.log("username:", username);
@@ -74,6 +72,11 @@ io.on("connection", (socket) => {
   // Listen for code changes
   socket.on(ACTIONS.CODE_CHANGE, ({ roomId, code }) => {
     socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { code });
+  });
+
+  // chat message broadcast
+  socket.on("send_message", ({ roomId, message, username }) => {
+    io.to(roomId).emit("receive_message", { message, username });
   });
 
   // Sync code to newly joined user

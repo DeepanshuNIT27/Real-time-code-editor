@@ -6,6 +6,7 @@ import Client from "../components/Client.jsx";
 import Editor from "../components/Editor.jsx";
 import LanguageSelector from "../components/LanguageSelector.jsx";
 import Output from "../components/Output.jsx";
+import ChatBox from "../components/ChatBox.jsx";
 import { initSocket } from "../socket.js";
 
 import {
@@ -182,6 +183,12 @@ const [selectedLanguage, setSelectedLanguage] = useState(() => {
         {/*Input/Output box */}
         <Output getCode={() => codeRef.current} languageId={selectedLanguage} />
       </div>
+      {/* chat box */}
+      <ChatBox
+        socketRef={socketRef}
+        roomId={roomId}
+        username={location.state?.username}
+      />
     </div>
   );
 };
