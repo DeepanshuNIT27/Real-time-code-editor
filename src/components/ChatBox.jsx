@@ -5,18 +5,19 @@ const ChatBox = ({ socketRef, roomId, username }) => {
   const [messages, setMessages] = useState([]);
   const messagesEndRef = useRef(null); // auto scroll ref
 
-  useEffect(() => {
-    if (!socketRef.current) return;
+ useEffect(() => {
+   if (!socketRef.current) return;
 
-    // listen for incoming messages
-    socketRef.current.on("receive_message", ({ message, username }) => {
-      setMessages((prev) => [...prev, { message, username }]);
-    });
+   const socket = socketRef.current;
 
-    return () => {
-      socketRef.current?.off("receive_message");
-    };
-  }, [socketRef.current]);
+   socket.on("receive_message", ({ message, username }) => {
+     setMessages((prev) => [...prev, { message, username }]);
+   });
+
+   return () => {
+     socket.off("receive_message");
+   };
+ }, [socketRef.current]);
 
   // scroll to bottom on new message
   useEffect(() => {

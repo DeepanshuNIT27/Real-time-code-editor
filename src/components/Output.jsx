@@ -34,7 +34,9 @@ const Output = ({ getCode, languageId }) => {
           },
           body: JSON.stringify({
             source_code: btoa(unescape(encodeURIComponent(code))),
-            language_id: languageId,
+            // 🚀 FIXED LINE: Agar function hai toh call karo (), warna direct number bhej do
+            language_id:
+              typeof languageId === "function" ? languageId() : languageId,
             stdin: input ? btoa(unescape(encodeURIComponent(input))) : "",
           }),
         },
@@ -43,19 +45,19 @@ const Output = ({ getCode, languageId }) => {
       const result = await submitResponse.json();
       console.log("Judge0 Response:", result);
 
-     if (result.stderr) {
-       setOutput(atob(result.stderr));
-       setIsError(true);
-     } else if (result.compile_output) {
-       setOutput(atob(result.compile_output));
-       setIsError(true);
-     } else if (result.status?.id !== 3) {
-       setOutput(result.status?.description || "Unknown error!");
-       setIsError(true);
-     } else {
-       setOutput(result.stdout ? atob(result.stdout) : "No output!");
-       setIsError(false);
-     }
+      if (result.stderr) {
+        setOutput(atob(result.stderr));
+        setIsError(true);
+      } else if (result.compile_output) {
+        setOutput(atob(result.compile_output));
+        setIsError(true);
+      } else if (result.status?.id !== 3) {
+        setOutput(result.status?.description || "Unknown error!");
+        setIsError(true);
+      } else {
+        setOutput(result.stdout ? atob(result.stdout) : "No output!");
+        setIsError(false);
+      }
     } catch (err) {
       console.error("Run code error:", err);
       setOutput("Something went wrong! Check console.");
@@ -67,7 +69,7 @@ const Output = ({ getCode, languageId }) => {
 
   return (
     <div className="outputWrap">
-      {/* input box */}
+      {/* Input column */}
       <div className="inputSection">
         <p className="ioLabel">Input (stdin)</p>
         <textarea
@@ -79,24 +81,26 @@ const Output = ({ getCode, languageId }) => {
         />
       </div>
 
-      {/* run button */}
-      <button className="btn runBtn" onClick={runCode} disabled={isLoading}>
-        {isLoading ? "Running..." : "Run Code"}
-      </button>
-
-      {/* output box */}
+      {/* Output column */}
       <div className="outputSection">
         <p className="ioLabel">Output</p>
         <div className={`ioBox outputBox ${isError ? "errorOutput" : ""}`}>
           {isLoading && <span>Running...</span>}
+          {/* ✅ FIXED HERE: Triple dots hata kar normal toggling condition laga di */}
           {!isLoading && output}
           {!isLoading && !output && (
             <span className="placeholder">Output will appear here...</span>
           )}
         </div>
       </div>
+
+      {/* Run button — full width bottom */}
+      <div className="runBtnRow">
+        <button className="btn runBtn" onClick={runCode} disabled={isLoading}>
+          {isLoading ? "Running..." : "▶ Run Code"}
+        </button>
+      </div>
     </div>
   );
 };
-
 export default Output;

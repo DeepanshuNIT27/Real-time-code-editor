@@ -74,6 +74,24 @@ io.on("connection", (socket) => {
     socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { code });
   });
 
+  // Listen for language changes
+  socket.on("language_change", ({ roomId, languageId }) => {
+    socket.in(roomId).emit("language_change", { languageId });
+  });
+
+  // Listen for file events and broadcast to room
+  socket.on("file_create", ({ roomId, file }) => {
+    socket.in(roomId).emit("file_create", { file });
+  });
+
+  socket.on("file_delete", ({ roomId, fileId }) => {
+    socket.in(roomId).emit("file_delete", { fileId });
+  });
+
+  socket.on("file_switch", ({ roomId, fileId }) => {
+    socket.in(roomId).emit("file_switch", { fileId });
+  });
+
   // chat message broadcast
   socket.on("send_message", ({ roomId, message, username }) => {
     io.to(roomId).emit("receive_message", { message, username });
