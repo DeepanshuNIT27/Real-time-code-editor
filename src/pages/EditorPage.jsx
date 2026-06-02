@@ -8,6 +8,7 @@ import Output from "../components/Output.jsx";
 import ChatBox from "../components/ChatBox.jsx";
 import AIChat from "../components/AIChat.jsx";
 import FilePanel from "../components/FilePanel.jsx";
+import Whiteboard from "../components/Whiteboard.jsx";
 import { initSocket } from "../socket.js";
 
 import {
@@ -155,9 +156,7 @@ const EditorPage = () => {
     reactNavigator("/");
   }
 
-  {
-    /* Redirect if no user data */
-  }
+  /* Redirect if no user data */
   if (!location.state) {
     return <Navigate to="/" />;
   }
@@ -221,113 +220,102 @@ const EditorPage = () => {
             overflow: "hidden",
           }}
         >
-          {activeLeftPanel === "editor" ? (
-            <>
-              {/* SIDE-BY-SIDE SIDEBAR AND EDITOR WORKSPACE */}
-              <div
-                className="upperWorkspace"
-                style={{ display: "flex", flex: 1, overflow: "hidden" }}
-              >
-                {/* File Sidebar */}
-                <FilePanel
-                  files={files}
-                  activeFileId={activeFileId}
-                  onFileSelect={(fileId) => {
-                    setActiveFileId(fileId);
-                    socketRef.current.emit("file_switch", { roomId, fileId });
-                  }}
-                  onFileCreate={(name) => {
-                    const newFile = {
-                      id: Date.now().toString(),
-                      name,
-                      content: "",
-                    };
-                    setFiles((prev) => [...prev, newFile]);
-                    setActiveFileId(newFile.id);
-                    socketRef.current.emit("file_create", {
-                      roomId,
-                      file: newFile,
-                    });
-                  }}
-                  onFileDelete={(fileId) => {
-                    if (files.length === 1) return;
-                    setFiles((prev) => prev.filter((f) => f.id !== fileId));
-                    if (activeFileId === fileId) setActiveFileId(files[0].id);
-                    socketRef.current.emit("file_delete", { roomId, fileId });
-                  }}
-                />
+          {/* SIDE-BY-SIDE SIDEBAR AND WORKSPACE CONTAINER */}
+          <div
+            className="upperWorkspace"
+            style={{ display: "flex", flex: 1, overflow: "hidden" }}
+          >
+            {/* 📁 File Sidebar (Hamesha visible rahega chahe Editor ho ya Whiteboard) */}
+            <FilePanel
+              files={files}
+              activeFileId={activeFileId}
+              onFileSelect={(fileId) => {
+                setActiveFileId(fileId);
+                socketRef.current.emit("file_switch", { roomId, fileId });
+              }}
+              onFileCreate={(name) => {
+                const newFile = {
+                  id: Date.now().toString(),
+                  name,
+                  content: "",
+                };
+                setFiles((prev) => [...prev, newFile]);
+                setActiveFileId(newFile.id);
+                socketRef.current.emit("file_create", {
+                  roomId,
+                  file: newFile,
+                });
+              }}
+              onFileDelete={(fileId) => {
+                if (files.length === 1) return;
+                setFiles((prev) => prev.filter((f) => f.id !== fileId));
+                if (activeFileId === fileId) setActiveFileId(files[0].id);
+                socketRef.current.emit("file_delete", { roomId, fileId });
+              }}
+            />
 
-                {/* Main Code Window */}
-                <div
-                  className="editorWorkspace"
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    flex: 1,
-                    backgroundColor: "#1e1e24",
-                  }}
-                >
-                  <div
-                    className="editorArea"
-                    style={{ flex: 1, overflow: "auto" }}
-                  >
-                    {socketRef.current && (
-                      <Editor
-                        socketRef={socketRef}
-                        roomId={roomId}
-                        activeFileId={activeFileId}
-                        fileContent={
-                          files.find((f) => f.id === activeFileId)?.content ||
-                          ""
-                        }
-                        onCodeChange={(code) => {
-                          codeRef.current = code;
-                          setFiles((prev) =>
-                            prev.map((file) =>
-                              file.id === activeFileId
-                                ? { ...file, content: code }
-                                : file,
-                            ),
-                          );
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* HORIZONTAL OUTPUT WINDOW UNDER SIDEBAR+EDITOR */}
-              <div
-                className="outputSectionWrapper"
-                style={{ height: "180px", borderTop: "1px solid #2d2d34" }}
-              >
-                <Output
-                  getCode={() => codeRef.current}
-                  languageId={() => {
-                    const activeFile = files.find((f) => f.id === activeFileId);
-                    if (!activeFile) return 71; // Default Python
-                    const extension = activeFile.name
-                      .split(".")
-                      .pop()
-                      .toLowerCase();
-                    return extensionToLangMap[extension] || 71;
-                  }}
-                />
-              </div>
-            </>
-          ) : (
+            {/* 🎯 Main Editor Workspace Box — Iske andar toggle hoga Editor aur Whiteboard */}
             <div
-              className="whiteboardPlaceholder"
+              className="editorWorkspace"
               style={{
-                flex: 1,
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                flexDirection: "column",
+                flex: 1,
+                backgroundColor: "#1e1e24",
+                position: "relative",
               }}
             >
-              <p>Whiteboard coming soon</p>
+              {activeLeftPanel === "editor" ? (
+                <div
+                  className="editorArea"
+                  style={{ flex: 1, overflow: "auto" }}
+                >
+                  {socketRef.current && (
+                    <Editor
+                      socketRef={socketRef}
+                      roomId={roomId}
+                      activeFileId={activeFileId}
+                      fileContent={
+                        files.find((f) => f.id === activeFileId)?.content || ""
+                      }
+                      onCodeChange={(code) => {
+                        codeRef.current = code;
+                        setFiles((prev) =>
+                          prev.map((file) =>
+                            file.id === activeFileId
+                              ? { ...file, content: code }
+                              : file,
+                          ),
+                        );
+                      }}
+                    />
+                  )}
+                </div>
+              ) : (
+                /* 🚀 Whiteboard ab exact Code Editor ki size me khulega */
+                <Whiteboard />
+              )}
             </div>
-          )}
+          </div>
+
+          {/* 🖥️ HORIZONTAL OUTPUT WINDOW (Yeh bhi hamesha dono ke niche tike rahega) */}
+          <div
+            className="outputSectionWrapper"
+            style={{ height: "180px", borderTop: "1px solid #2d2d34" }}
+          >
+            <Output
+              getCode={() => codeRef.current}
+              languageId={() => {
+                const activeFile = files.find((f) => f.id === activeFileId);
+                if (!activeFile) return 71; // Default Python
+                const extension = activeFile.name
+                  .split(".")
+                  .pop()
+                  .toLowerCase();
+                return extensionToLangMap[extension] || 71;
+              }}
+            />
+          </div>
         </div>
 
         {/* RIGHT PANEL (Chat & AI Assistant) */}
