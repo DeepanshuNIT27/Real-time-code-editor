@@ -14,6 +14,7 @@ import { initSocket } from "../socket.js";
 // Safe wrapper injection layer imports
 import { VideoCallProvider } from "../context/VideoCallContext.jsx";
 import VideoContainer from "../components/VideoContainer.jsx";
+import { useCallStateHooks } from "@stream-io/video-react-sdk"; // 🎯 FIX: Screen state padhne ke liye naya import
 
 import {
   useLocation,
@@ -30,6 +31,64 @@ const extensionToLangMap = {
   c: 50,
   go: 60,
   rb: 72,
+};
+
+// 🎯 NAYA COMPONENT: Dusre (remote) users ki screen share ko editor ki jagah badi dikhane ke liye
+const RemoteScreenShareViewer = ({ children }) => {
+  const { useParticipants } = useCallStateHooks();
+  const participants = useParticipants();
+
+  // Check karo agar koi aisa participant hai jo 'local' nahi hai aur uski screen share stream chal rahi hai
+  const remoteSharer = participants.find(
+    (p) => !p.isLocalParticipant && p.screenShareStream,
+  );
+
+  if (remoteSharer) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          width: "100%",
+          height: "100%",
+          backgroundColor: "#000",
+          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Name Badge on top of screen share */}
+        <div
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 16,
+            zIndex: 50,
+            backgroundColor: "#3b82f6",
+            padding: "6px 12px",
+            borderRadius: "6px",
+            color: "white",
+            fontSize: "13px",
+            fontWeight: "bold",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
+          }}
+        >
+          👁️ Viewing {remoteSharer.name || "Remote User"}'s Screen
+        </div>
+        <video
+          autoPlay
+          playsInline
+          ref={(el) => {
+            if (el && remoteSharer.screenShareStream)
+              el.srcObject = remoteSharer.screenShareStream;
+          }}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        />
+      </div>
+    );
+  }
+
+  // Agar kisi remote user ne screen share nahi ki hai (ya tum khud kar rahe ho), toh normal Editor dikhao
+  return children;
 };
 
 // 🎯 FIX 1: Parent component context lifting shell setup
@@ -288,30 +347,33 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   position: "relative",
                 }}
               >
-                {activeLeftPanel === "editor" ? (
-                  <div
-                    className="editorArea"
-                    style={{ flex: 1, overflow: "auto" }}
-                  >
-                    {socketRef.current && (
-                      <Editor
-                        socketRef={socketRef}
-                        roomId={roomId}
-                        activeFileId={activeFileId}
-                        fileContent={
-                          files.find((f) => f.id === activeFileId)?.content ||
-                          ""
-                        }
-                        onCodeChange={(code) => {
-                          codeRef.current = code;
-                        }}
-                      />
-                    )}
-                  </div>
-                ) : (
-                  // 🎯 PERMANENT LOGICAL FIX 2: Whiteboard ko structural synchronization parameters inject kar diye hain
-                  <Whiteboard socketRef={socketRef} roomId={roomId} />
-                )}
+                {/* 🎯 NAYA WRAPPER: Yahan Editor ko screen share viewer ke andar wrap kiya hai */}
+                <RemoteScreenShareViewer>
+                  {activeLeftPanel === "editor" ? (
+                    <div
+                      className="editorArea"
+                      style={{ flex: 1, overflow: "auto" }}
+                    >
+                      {socketRef.current && (
+                        <Editor
+                          socketRef={socketRef}
+                          roomId={roomId}
+                          activeFileId={activeFileId}
+                          fileContent={
+                            files.find((f) => f.id === activeFileId)?.content ||
+                            ""
+                          }
+                          onCodeChange={(code) => {
+                            codeRef.current = code;
+                          }}
+                        />
+                      )}
+                    </div>
+                  ) : (
+                    // 🎯 PERMANENT LOGICAL FIX 2: Whiteboard ko structural synchronization parameters inject kar diye hain
+                    <Whiteboard socketRef={socketRef} roomId={roomId} />
+                  )}
+                </RemoteScreenShareViewer>
               </div>
             </div>
 
