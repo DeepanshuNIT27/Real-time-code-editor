@@ -15,16 +15,16 @@ const Editor = ({
   fileContent,
 }) => {
   const editorRef = useRef(null);
-
-  // 📝 MASTER FIX REF: Yeh ref hamesha bina loop bnae ekdam fresh activeFileId track karega
   const activeFileIdRef = useRef(activeFileId);
 
-  // Jab bhi activeFileId badle, ref ko turant update karo
+  // Keep ref synchronized with the latest active file identifier safely
   useEffect(() => {
     activeFileIdRef.current = activeFileId;
   }, [activeFileId]);
 
   useEffect(() => {
+    let currentSocket = socketRef.current;
+
     async function init() {
       editorRef.current = CodeMirror.fromTextArea(
         document.getElementById("realtimeEditor"),
@@ -37,7 +37,7 @@ const Editor = ({
         },
       );
 
-      // Pehli baar load hone par code load karo
+      // Load initial code representation bound securely to room and file scope
       const savedCode = localStorage.getItem(
         `code-${roomId}-${activeFileIdRef.current}`,
       );
@@ -47,35 +47,40 @@ const Editor = ({
         editorRef.current.setValue(fileContent || "");
       }
 
-      // Jb user type karega
+      // Handle user keystrokes changes operations
       editorRef.current.on("change", (instance, changes) => {
         const { origin } = changes;
         const code = instance.getValue();
 
-        // Parent state ko update karo
+        // Propagate current string snapshot to parent container state
         onCodeChange(code);
 
-        // State update hone ka wait nahi karenge, direct Ref se hamesha CURRENT file ID nikalenge
         if (origin !== "setValue") {
           localStorage.setItem(
             `code-${roomId}-${activeFileIdRef.current}`,
             code,
           );
 
+          // 🎯 FIX 1: Emit signature payload carries specific target file id bounds to avoid remote overlap crashes
           if (socketRef.current) {
             socketRef.current.emit(ACTIONS.CODE_CHANGE, {
               roomId,
+              fileId: activeFileIdRef.current,
               code,
             });
           }
         }
       });
 
-      // Socket listener for syncing code
+      // 🎯 FIX 2: Dynamic listener validation maps transmission payload directly to matching scoped file streams
       if (socketRef.current) {
-        socketRef.current.on(ACTIONS.CODE_CHANGE, ({ code }) => {
-          if (code !== null && code !== undefined) {
-            if (editorRef.current.getValue() !== code) {
+        socketRef.current.on(ACTIONS.CODE_CHANGE, ({ fileId, code }) => {
+          if (
+            fileId === activeFileIdRef.current &&
+            code !== null &&
+            code !== undefined
+          ) {
+            if (editorRef.current && editorRef.current.getValue() !== code) {
               editorRef.current.setValue(code);
             }
           }
@@ -85,16 +90,19 @@ const Editor = ({
 
     init();
 
-    // Cleanup
+    // 🎯 FIX 3: Leak-proof absolute structural unmounting isolation cleanup
     return () => {
-      socketRef.current?.off(ACTIONS.CODE_CHANGE);
+      if (currentSocket) {
+        currentSocket.off(ACTIONS.CODE_CHANGE);
+      }
       if (editorRef.current) {
         editorRef.current.toTextArea();
+        editorRef.current = null;
       }
     };
-  }, []); // Yeh hook sirf ek baar chlega aur mast chalega
+  }, [roomId, onCodeChange, socketRef]);
 
-  // Jab bhi file badlegi, yeh purana code uraye bina fresh load karega
+  // File transition swap operational view hook loader
   useEffect(() => {
     if (editorRef.current) {
       const savedCode = localStorage.getItem(`code-${roomId}-${activeFileId}`);
@@ -109,9 +117,23 @@ const Editor = ({
         }
       }
     }
-  }, [activeFileId, roomId]);
+  }, [activeFileId, roomId, fileContent]);
 
-  return <textarea id="realtimeEditor"></textarea>;
+  // 🎯 FIX 4: Yeh function editor ke andar dabaaye gaye Spacebar keyboard click ko global browser tak pahuche se strictly BLOCK karega!
+  const handleEditorKeyDown = (e) => {
+    if (e.key === " " || e.keyCode === 32) {
+      e.stopPropagation(); // Stream SDK ko trigger karne se rokega 🛑
+    }
+  };
+
+  return (
+    <div
+      onKeyDown={handleEditorKeyDown}
+      style={{ height: "100%", width: "100%" }}
+    >
+      <textarea id="realtimeEditor"></textarea>
+    </div>
+  );
 };
 
 export default Editor;

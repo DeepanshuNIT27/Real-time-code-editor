@@ -11,6 +11,10 @@ import FilePanel from "../components/FilePanel.jsx";
 import Whiteboard from "../components/Whiteboard.jsx";
 import { initSocket } from "../socket.js";
 
+// Safe wrapper injection layer imports
+import { VideoCallProvider } from "../context/VideoCallContext.jsx";
+import VideoContainer from "../components/VideoContainer.jsx";
+
 import {
   useLocation,
   useParams,
@@ -18,49 +22,51 @@ import {
   Navigate,
 } from "react-router-dom";
 
-// 🎯 Extension to Judge0 Language ID Mapping (Saari 7 Languages)
 const extensionToLangMap = {
-  cpp: 54, // C++
-  py: 71, // Python
-  js: 63, // JavaScript
-  java: 62, // Java
-  c: 50, // C
-  go: 60, // Go
-  rb: 72, // Ruby
+  cpp: 54,
+  py: 71,
+  js: 63,
+  java: 62,
+  c: 50,
+  go: 60,
+  rb: 72,
 };
 
+// 🎯 FIX 1: Parent component context lifting shell setup
 const EditorPage = () => {
-  // References
-  const socketRef = useRef(null);
-  const codeRef = useRef(null);
-
-  // Router hooks
   const location = useLocation();
   const { roomId } = useParams();
+
+  if (!location.state) return <Navigate to="/" />;
+
+  return <EditorPageContent roomId={roomId} locationState={location.state} />;
+};
+
+// Internal Collaborative Workspace Container System
+const EditorPageContent = ({ roomId, locationState }) => {
+  const socketRef = useRef(null);
+  const codeRef = useRef(null);
   const reactNavigator = useNavigate();
 
-  // Connected clients state
   const [clients, setClients] = useState([]);
   const [activeRightTab, setActiveRightTab] = useState("chat");
   const [activeLeftPanel, setActiveLeftPanel] = useState("editor");
+  const [currentSocketId, setCurrentSocketId] = useState(null);
 
-  // Files list aur active file track karo
   const [files, setFiles] = useState([
     { id: "1", name: "main.cpp", content: "" },
   ]);
   const [activeFileId, setActiveFileId] = useState("1");
 
   useEffect(() => {
-    // Initialize socket connection
     const init = async () => {
       socketRef.current = await initSocket();
 
-      console.log("BACKEND URL:", import.meta.env.VITE_BACKEND_URL);
-      console.log("Socket ID:", socketRef.current.id);
+      if (socketRef.current && socketRef.current.id) {
+        setCurrentSocketId(socketRef.current.id);
+      }
 
-      // Handle socket errors
       function handleErrors(err) {
-        console.log("socket error", err);
         toast.error("Socket connection failed, try again later.");
         reactNavigator("/");
       }
@@ -68,27 +74,18 @@ const EditorPage = () => {
       socketRef.current.on("connect_error", handleErrors);
       socketRef.current.on("connect_failed", handleErrors);
 
-      // Join room
       socketRef.current.emit(ACTIONS.JOIN, {
         roomId,
-        username: location.state?.username,
-      });
-
-      console.log("JOIN emitted:", {
-        roomId,
-        username: location.state?.username,
+        username: locationState?.username,
       });
 
       socketRef.current.on(
         ACTIONS.JOINED,
         ({ clients, username, socketId }) => {
-          console.log("JOINED EVENT");
           setClients([...clients]);
-
-          if (username !== location.state?.username) {
+          if (username !== locationState?.username) {
             toast.success(`${username} joined the room.`);
           }
-
           socketRef.current.emit(ACTIONS.SYNC_CODE, {
             code: codeRef.current,
             socketId,
@@ -96,39 +93,30 @@ const EditorPage = () => {
         },
       );
 
-      // Listening for disconnected users
       socketRef.current.on(ACTIONS.DISCONNECTED, ({ socketId, username }) => {
         toast.success(`${username} left the room.`);
-        setClients((prev) => {
-          return prev.filter((client) => client.socketId !== socketId);
-        });
+        setClients((prev) => prev.filter((c) => c.socketId !== socketId));
       });
 
-      // Naya file create hone pe state update karo
-      socketRef.current.on("file_create", ({ file }) => {
-        setFiles((prev) => [...prev, file]);
-      });
+      socketRef.current.on("file_create", ({ file }) =>
+        setFiles((prev) => [...prev, file]),
+      );
 
-      // File delete hone pe list se hata do
       socketRef.current.on("file_delete", ({ fileId }) => {
-        setFiles((prev) => {
-          const remaining = prev.filter((f) => f.id !== fileId);
-          if (activeFileId === fileId && remaining.length > 0) {
-            setActiveFileId(remaining[0].id);
-          }
-          return remaining;
-        });
+        setFiles((prev) => prev.filter((f) => f.id !== fileId));
       });
 
-      // Doosre user ne file switch ki toh yahan bhi switch karo
-      socketRef.current.on("file_switch", ({ fileId }) => {
-        setActiveFileId(fileId);
+      socketRef.current.on("file_switch", ({ fileId }) =>
+        setActiveFileId(fileId),
+      );
+
+      socketRef.current.on("panel_switch", ({ panel }) => {
+        setActiveLeftPanel(panel);
       });
     };
 
     init();
 
-    // Cleanup
     return () => {
       socketRef.current?.disconnect();
       socketRef.current?.off(ACTIONS.JOINED);
@@ -136,239 +124,265 @@ const EditorPage = () => {
       socketRef.current?.off("file_create");
       socketRef.current?.off("file_delete");
       socketRef.current?.off("file_switch");
+      socketRef.current?.off("panel_switch");
     };
-  }, [roomId, location.state?.username, reactNavigator]);
+  }, [roomId, locationState?.username, reactNavigator]);
 
-  // Copy room id to clipboard
+  // 🎯 PERMANENT LOGICAL FIX 1: Open file ke extension (.cpp, .py) ke hisab se language ID select karne ka structural function
+  const getCurrentLanguageId = () => {
+    const activeFile = files.find((f) => f.id === activeFileId);
+    if (!activeFile) return 71; // Fallback structure
+
+    const parts = activeFile.name.split(".");
+    const extension = parts[parts.length - 1]; // Extracted tag extension string tokens
+
+    return extensionToLangMap[extension] || 71;
+  };
+
   async function copyRoomId() {
     try {
       await navigator.clipboard.writeText(roomId);
       toast.success("Room ID has been copied to your clipboard");
     } catch (err) {
       toast.error("Could not copy the Room ID");
-      console.error(err);
     }
   }
 
-  // Leave room
   function leaveRoom() {
     localStorage.removeItem(`code-${roomId}`);
     reactNavigator("/");
   }
 
-  /* Redirect if no user data */
-  if (!location.state) {
-    return <Navigate to="/" />;
-  }
-
   return (
-    <div className="appShell">
-      {/* TOP BAR */}
-      <header className="topBar">
-        <div className="topBarLeft">
-          <img className="topLogo" src="/code-sync.png" alt="logo" />
-          <div className="roomInfo">
-            <span className="roomName">
-              Room: {location.state?.username}'s Room
-            </span>
-            <span className="onlineBadge">● Online ({clients.length})</span>
-          </div>
-        </div>
-
-        <div className="topBarCenter">
-          <div className="panelToggleGroup">
-            <button
-              className={`panelToggleBtn ${activeLeftPanel === "editor" ? "panelToggleActive" : ""}`}
-              onClick={() => setActiveLeftPanel("editor")}
-            >
-              Code Editor
-            </button>
-            <button
-              className={`panelToggleBtn ${activeLeftPanel === "whiteboard" ? "panelToggleActive" : ""}`}
-              onClick={() => setActiveLeftPanel("whiteboard")}
-            >
-              Whiteboard
-            </button>
-          </div>
-        </div>
-
-        <div className="topBarRight">
-          <div className="topAvatarRow">
-            {clients.map((client) => (
-              <Client key={client.socketId} username={client.username} />
-            ))}
-          </div>
-          <button className="btn copyBtn" onClick={copyRoomId}>
-            Copy Room ID
-          </button>
-          <button className="btn leaveBtn" onClick={leaveRoom}>
-            Leave
-          </button>
-        </div>
-      </header>
-
-      {/* MAIN CONTENT AREA */}
-      <div className="mainContent">
-        {/* LEFT COMPONENT MASTER SYSTEM */}
-        <div
-          className="leftPanelContainer"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            flex: 1,
-            height: "100%",
-            overflow: "hidden",
-          }}
-        >
-          {/* SIDE-BY-SIDE SIDEBAR AND WORKSPACE CONTAINER */}
-          <div
-            className="upperWorkspace"
-            style={{ display: "flex", flex: 1, overflow: "hidden" }}
-          >
-            {/* 📁 File Sidebar (Hamesha visible rahega chahe Editor ho ya Whiteboard) */}
-            <FilePanel
-              files={files}
-              activeFileId={activeFileId}
-              onFileSelect={(fileId) => {
-                setActiveFileId(fileId);
-                socketRef.current.emit("file_switch", { roomId, fileId });
-              }}
-              onFileCreate={(name) => {
-                const newFile = {
-                  id: Date.now().toString(),
-                  name,
-                  content: "",
-                };
-                setFiles((prev) => [...prev, newFile]);
-                setActiveFileId(newFile.id);
-                socketRef.current.emit("file_create", {
-                  roomId,
-                  file: newFile,
-                });
-              }}
-              onFileDelete={(fileId) => {
-                if (files.length === 1) return;
-                setFiles((prev) => prev.filter((f) => f.id !== fileId));
-                if (activeFileId === fileId) setActiveFileId(files[0].id);
-                socketRef.current.emit("file_delete", { roomId, fileId });
-              }}
-            />
-
-            {/* 🎯 Main Editor Workspace Box — Iske andar toggle hoga Editor aur Whiteboard */}
-            <div
-              className="editorWorkspace"
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                flex: 1,
-                backgroundColor: "#1e1e24",
-                position: "relative",
-              }}
-            >
-              {activeLeftPanel === "editor" ? (
-                <div
-                  className="editorArea"
-                  style={{ flex: 1, overflow: "auto" }}
-                >
-                  {socketRef.current && (
-                    <Editor
-                      socketRef={socketRef}
-                      roomId={roomId}
-                      activeFileId={activeFileId}
-                      fileContent={
-                        files.find((f) => f.id === activeFileId)?.content || ""
-                      }
-                      onCodeChange={(code) => {
-                        codeRef.current = code;
-                        setFiles((prev) =>
-                          prev.map((file) =>
-                            file.id === activeFileId
-                              ? { ...file, content: code }
-                              : file,
-                          ),
-                        );
-                      }}
-                    />
-                  )}
-                </div>
-              ) : (
-                /* 🚀 Whiteboard ab exact Code Editor ki size me khulega */
-                <Whiteboard />
-              )}
+    <VideoCallProvider
+      userId={currentSocketId || "temp-id"}
+      userName={locationState?.username}
+      roomId={roomId}
+    >
+      <div
+        className="appShell"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          height: "100vh",
+          overflow: "hidden",
+        }}
+      >
+        {/* 🟢 TOP BAR */}
+        <header className="topBar" style={{ flexShrink: 0 }}>
+          <div className="topBarLeft">
+            <img className="topLogo" src="/code-sync.png" alt="logo" />
+            <div className="roomInfo">
+              <span className="roomName">
+                Room: {locationState?.username}'s Room
+              </span>
+              <span className="onlineBadge">● Online ({clients.length})</span>
             </div>
           </div>
 
-          {/* 🖥️ HORIZONTAL OUTPUT WINDOW (Yeh bhi hamesha dono ke niche tike rahega) */}
+          <div className="topBarCenter">
+            <div className="panelToggleGroup">
+              <button
+                className={`panelToggleBtn ${activeLeftPanel === "editor" ? "panelToggleActive" : ""}`}
+                onClick={() => {
+                  setActiveLeftPanel("editor");
+                  socketRef.current?.emit("panel_switch", {
+                    roomId,
+                    panel: "editor",
+                  });
+                }}
+              >
+                Code Editor
+              </button>
+              <button
+                className={`panelToggleBtn ${activeLeftPanel === "whiteboard" ? "panelToggleActive" : ""}`}
+                onClick={() => {
+                  setActiveLeftPanel("whiteboard");
+                  socketRef.current?.emit("panel_switch", {
+                    roomId,
+                    panel: "whiteboard",
+                  });
+                }}
+              >
+                Whiteboard
+              </button>
+            </div>
+          </div>
+
+          <div className="topBarRight">
+            <div className="topAvatarRow">
+              {clients.map((client) => (
+                <Client key={client.socketId} username={client.username} />
+              ))}
+            </div>
+            <button className="btn copyBtn" onClick={copyRoomId}>
+              Copy Room ID
+            </button>
+            <button className="btn leaveBtn" onClick={leaveRoom}>
+              Leave
+            </button>
+          </div>
+        </header>
+
+        {/* 🔵 CENTER WORKSPACE SYSTEM AREA */}
+        <div
+          className="mainContent"
+          style={{ flex: 1, overflow: "hidden", display: "flex" }}
+        >
           <div
-            className="outputSectionWrapper"
-            style={{ height: "180px", borderTop: "1px solid #2d2d34" }}
+            className="leftPanelContainer"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              height: "100%",
+              overflow: "hidden",
+            }}
           >
-            <Output
-              getCode={() => codeRef.current}
-              languageId={() => {
-                const activeFile = files.find((f) => f.id === activeFileId);
-                if (!activeFile) return 71; // Default Python
-                const extension = activeFile.name
-                  .split(".")
-                  .pop()
-                  .toLowerCase();
-                return extensionToLangMap[extension] || 71;
-              }}
-            />
-          </div>
-        </div>
-
-        {/* RIGHT PANEL (Chat & AI Assistant) */}
-        <div className="rightPanel">
-          {/* Tabs */}
-          <div className="rightTabs">
-            <button
-              className={`rightTab ${activeRightTab === "chat" ? "activeTab" : ""}`}
-              onClick={() => setActiveRightTab("chat")}
+            <div
+              className="upperWorkspace"
+              style={{ display: "flex", flex: 1, overflow: "hidden" }}
             >
-              Chat
-            </button>
-            <button
-              className={`rightTab ${activeRightTab === "ai" ? "activeTab" : ""}`}
-              onClick={() => setActiveRightTab("ai")}
-            >
-              AI Assistant
-            </button>
-          </div>
-          {/* Content */}
-          <div className="rightTabContent">
-            {activeRightTab === "chat" ? (
-              <ChatBox
-                socketRef={socketRef}
-                roomId={roomId}
-                username={location.state?.username}
+              <FilePanel
+                files={files}
+                activeFileId={activeFileId}
+                onFileSelect={(fileId) => {
+                  const currentMemoryCode = codeRef.current || "";
+                  setFiles((p) =>
+                    p.map((f) =>
+                      f.id === activeFileId
+                        ? { ...f, content: currentMemoryCode }
+                        : f,
+                    ),
+                  );
+                  setActiveFileId(fileId);
+                  socketRef.current.emit("file_switch", { roomId, fileId });
+                }}
+                onFileCreate={(name) => {
+                  const newFile = {
+                    id: Date.now().toString(),
+                    name,
+                    content: "",
+                  };
+                  setFiles((prev) => [...prev, newFile]);
+                  setActiveFileId(newFile.id);
+                  socketRef.current.emit("file_create", {
+                    roomId,
+                    file: newFile,
+                  });
+                }}
+                onFileDelete={(fileId) => {
+                  if (files.length === 1) return;
+                  setFiles((prev) => prev.filter((f) => f.id !== fileId));
+                  socketRef.current.emit("file_delete", { roomId, fileId });
+                }}
               />
-            ) : (
-              <AIChat getCode={() => codeRef.current} selectedLanguage={71} />
-            )}
+
+              <div
+                className="editorWorkspace"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  flex: 1,
+                  backgroundColor: "#1e1e24",
+                  position: "relative",
+                }}
+              >
+                {activeLeftPanel === "editor" ? (
+                  <div
+                    className="editorArea"
+                    style={{ flex: 1, overflow: "auto" }}
+                  >
+                    {socketRef.current && (
+                      <Editor
+                        socketRef={socketRef}
+                        roomId={roomId}
+                        activeFileId={activeFileId}
+                        fileContent={
+                          files.find((f) => f.id === activeFileId)?.content ||
+                          ""
+                        }
+                        onCodeChange={(code) => {
+                          codeRef.current = code;
+                        }}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  // 🎯 PERMANENT LOGICAL FIX 2: Whiteboard ko structural synchronization parameters inject kar diye hain
+                  <Whiteboard socketRef={socketRef} roomId={roomId} />
+                )}
+              </div>
+            </div>
+
+            {/* 🔴 OUTPUT COMPILER ARTIFACT MOUNT LAYER */}
+            <div
+              className="outputSectionWrapper"
+              style={{
+                height: "180px",
+                borderTop: "1px solid #2d2d34",
+                flexShrink: 0,
+              }}
+            >
+              {/* 🎯 PERMANENT LOGICAL FIX 3: Dynamic invocation handler assigned safely */}
+              <Output
+                getCode={() => codeRef.current}
+                languageId={getCurrentLanguageId}
+              />
+            </div>
+          </div>
+
+          {/* SIDE TABS AREA PANEL */}
+          <div className="rightPanel">
+            <div className="rightTabs">
+              <button
+                className={`rightTab ${activeRightTab === "chat" ? "activeTab" : ""}`}
+                onClick={() => setActiveRightTab("chat")}
+              >
+                Chat
+              </button>
+              <button
+                className={`rightTab ${activeRightTab === "ai" ? "activeTab" : ""}`}
+                onClick={() => setActiveRightTab("ai")}
+              >
+                AI Assistant
+              </button>
+            </div>
+            <div className="rightTabContent">
+              {activeRightTab === "chat" ? (
+                <ChatBox
+                  socketRef={socketRef}
+                  roomId={roomId}
+                  username={locationState?.username}
+                />
+              ) : (
+                <AIChat getCode={() => codeRef.current} />
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* BOTTOM BAR */}
-      <div className="bottomBar">
-        <span className="bottomBarLabel">Video Call — coming soon</span>
-        <div className="bottomBarControls">
-          <button className="mediaBtn" disabled>
-            Mic
-          </button>
-          <button className="mediaBtn" disabled>
-            Camera
-          </button>
-          <button className="mediaBtn" disabled>
-            Screen Share
-          </button>
-          <button className="mediaBtn endCallBtn" disabled>
-            End Call
-          </button>
+        {/* 🟠 BOTTOM PANEL WITH SEALED PROVIDER CONTROLS */}
+        <div
+          className="bottomBar"
+          style={{
+            height: "110px",
+            padding: "0",
+            flexShrink: 0,
+            overflow: "hidden",
+            backgroundColor: "#14141b",
+          }}
+        >
+          {currentSocketId ? (
+            <VideoContainer />
+          ) : (
+            <div className="flex items-center justify-center w-full h-full text-gray-400 text-sm">
+              Connecting and verifying hardware sync signals...
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </VideoCallProvider>
   );
 };
 

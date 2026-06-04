@@ -1,65 +1,69 @@
 const express = require("express");
 const app = express();
-
-// Imports
 const http = require("http");
 const path = require("path");
+const cors = require("cors");
 const { Server } = require("socket.io");
 const ACTIONS = require("./src/Actions.cjs");
+const { StreamClient } = require("@stream-io/node-sdk");
+require("dotenv").config();
 
 const server = http.createServer(app);
 
-// Socket.io setup with CORS
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-});
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  }),
+);
+app.use(express.json());
 
-// Serve Vite build files
+const io = new Server(server, {
+  cors: { origin: "*", methods: ["GET", "POST"] },
+});
 app.use(express.static(path.join(__dirname, "dist")));
+
+// (Video token route same rahega...)
+app.post("/api/video/token", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: "User ID is required" });
+    const apiKey = process.env.STREAM_API_KEY;
+    const apiSecret = process.env.STREAM_API_SECRET;
+    if (!apiKey || !apiSecret)
+      return res.status(500).json({ error: "Stream credentials missing" });
+    const serverClient = new StreamClient(apiKey, apiSecret);
+    const token = serverClient.createCallToken({
+      user_id: userId,
+      validity_in_seconds: 3600,
+    });
+    return res.status(200).json({ token, apiKey });
+  } catch (error) {
+    console.error("Video token generation error:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 
-// Store connected users
 const userSocketMap = {};
-
-// Get all connected clients in a room
 function getAllConnectedClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
-    (socketId) => {
-      return {
-        socketId,
-        username: userSocketMap[socketId],
-      };
-    },
+    (socketId) => ({
+      socketId,
+      username: userSocketMap[socketId],
+    }),
   );
 }
 
-// Socket connection
-
 io.on("connection", (socket) => {
-  console.log("SOCKET CONNECTED:", socket.id);
-
-  // Join room
-
   socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
-    console.log("JOIN RECEIVED");
-    console.log("roomId:", roomId);
-    console.log("username:", username);
-
     userSocketMap[socket.id] = username;
-
     socket.join(roomId);
-
     const clients = getAllConnectedClients(roomId);
-
-    console.log("clients in room:", clients);
-
-    // Emit joined event to all clients in room
     clients.forEach(({ socketId }) => {
       io.to(socketId).emit(ACTIONS.JOINED, {
         clients,
@@ -69,59 +73,29 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Listen for code changes
-  socket.on(ACTIONS.CODE_CHANGE, ({ roomId, code }) => {
-    socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { code });
+  socket.on(ACTIONS.CODE_CHANGE, ({ roomId, fileId, code }) => {
+    socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { fileId, code });
   });
 
-  // Listen for language changes
-  socket.on("language_change", ({ roomId, languageId }) => {
-    socket.in(roomId).emit("language_change", { languageId });
+  socket.on("whiteboard_draw", ({ roomId, delta }) => {
+    socket.in(roomId).emit("whiteboard_draw_remote", { delta });
   });
 
-  // Listen for file events and broadcast to room
-  socket.on("file_create", ({ roomId, file }) => {
-    socket.in(roomId).emit("file_create", { file });
-  });
-
-  socket.on("file_delete", ({ roomId, fileId }) => {
-    socket.in(roomId).emit("file_delete", { fileId });
-  });
-
-  socket.on("file_switch", ({ roomId, fileId }) => {
-    socket.in(roomId).emit("file_switch", { fileId });
-  });
-
-  // chat message broadcast
-  socket.on("send_message", ({ roomId, message, username }) => {
-    io.to(roomId).emit("receive_message", { message, username });
-  });
-
-  // Sync code to newly joined user
-  socket.on(ACTIONS.SYNC_CODE, ({ socketId, code }) => {
-    io.to(socketId).emit(ACTIONS.CODE_CHANGE, { code });
-  });
-
-  // Handle disconnecting users
+  // ... (baki saare events same...)
   socket.on("disconnecting", () => {
     const rooms = [...socket.rooms];
-
     rooms.forEach((roomId) => {
-      socket.in(roomId).emit(ACTIONS.DISCONNECTED, {
-        socketId: socket.id,
-        username: userSocketMap[socket.id],
-      });
+      socket
+        .in(roomId)
+        .emit(ACTIONS.DISCONNECTED, {
+          socketId: socket.id,
+          username: userSocketMap[socket.id],
+        });
     });
-
     delete userSocketMap[socket.id];
-
     socket.leave();
   });
 });
 
 const PORT = process.env.PORT || 5000;
-
-// Start server
-server.listen(PORT, () => {
-  console.log(`Listening on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Listening on port ${PORT}`));

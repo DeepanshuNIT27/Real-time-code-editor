@@ -12,7 +12,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stream-io/node-sdk": "^0.7.59",
+    "@stream-io/video-react-sdk": "^1.37.4",
     "codemirror": "^5.65.21",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "react": "^19.2.5",
     "react-avatar": "^5.0.4",
