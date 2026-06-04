@@ -81,16 +81,19 @@ io.on("connection", (socket) => {
     socket.in(roomId).emit("whiteboard_draw_remote", { delta });
   });
 
+  // 🎯 FIX: 'socket.in' ki jagah 'io.in' kar diya. Ab message sabko jayega (Sender + Receiver)
+  socket.on("send_message", ({ roomId, message, username }) => {
+    io.in(roomId).emit("receive_message", { message, username });
+  });
+
   // ... (baki saare events same...)
   socket.on("disconnecting", () => {
     const rooms = [...socket.rooms];
     rooms.forEach((roomId) => {
-      socket
-        .in(roomId)
-        .emit(ACTIONS.DISCONNECTED, {
-          socketId: socket.id,
-          username: userSocketMap[socket.id],
-        });
+      socket.in(roomId).emit(ACTIONS.DISCONNECTED, {
+        socketId: socket.id,
+        username: userSocketMap[socket.id],
+      });
     });
     delete userSocketMap[socket.id];
     socket.leave();
