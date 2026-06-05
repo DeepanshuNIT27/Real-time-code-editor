@@ -34,7 +34,6 @@ const Output = ({ getCode, languageId }) => {
           },
           body: JSON.stringify({
             source_code: btoa(unescape(encodeURIComponent(code))),
-            // 🚀 FIXED LINE: Agar function hai toh call karo (), warna direct number bhej do
             language_id:
               typeof languageId === "function" ? languageId() : languageId,
             stdin: input ? btoa(unescape(encodeURIComponent(input))) : "",
@@ -67,40 +66,183 @@ const Output = ({ getCode, languageId }) => {
     }
   };
 
-  return (
-    <div className="outputWrap">
-      {/* Input column */}
-      <div className="inputSection">
-        <p className="ioLabel">Input (stdin)</p>
-        <textarea
-          className="ioBox"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Enter input here..."
-          rows={3}
-        />
-      </div>
+  // 🎯 NAYA FUNCTION: Output clear karne ke liye
+  const clearOutput = () => {
+    setOutput("");
+    setIsError(false);
+  };
 
-      {/* Output column */}
-      <div className="outputSection">
-        <p className="ioLabel">Output</p>
-        <div className={`ioBox outputBox ${isError ? "errorOutput" : ""}`}>
-          {isLoading && <span>Running...</span>}
-          {/* ✅ FIXED HERE: Triple dots hata kar normal toggling condition laga di */}
-          {!isLoading && output}
-          {!isLoading && !output && (
-            <span className="placeholder">Output will appear here...</span>
-          )}
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        width: "100%",
+        backgroundColor: "#14141b",
+        color: "#fff",
+      }}
+    >
+      {/* 🟢 MAIN 50-50 SPLIT AREA */}
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+        {/* LEFT: Input Column */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            borderRight: "1px solid #3d3e59",
+            padding: "12px",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "bold",
+              fontSize: "12px",
+              color: "#fff",
+              marginBottom: "8px",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Input
+          </div>
+          <textarea
+            style={{
+              flex: 1,
+              backgroundColor: "transparent",
+              border: "none",
+              color: "#d1d5db",
+              outline: "none",
+              resize: "none",
+              fontFamily: "monospace",
+              fontSize: "14px",
+            }}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Enter input here..."
+          />
+        </div>
+
+        {/* RIGHT: Output Column */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            padding: "12px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "8px",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: "bold",
+                fontSize: "12px",
+                color: "#fff",
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+              }}
+            >
+              Output
+            </div>
+
+            {/* 🎯 CLEAR BUTTON */}
+            <button
+              onClick={clearOutput}
+              style={{
+                backgroundColor: "#2b2c40",
+                color: "#d1d5db",
+                border: "1px solid #3d3e59",
+                padding: "4px 12px",
+                borderRadius: "6px",
+                fontSize: "12px",
+                cursor: "pointer",
+                transition: "all 0.2s",
+              }}
+              onMouseOver={(e) => (e.target.style.backgroundColor = "#3d3e59")}
+              onMouseOut={(e) => (e.target.style.backgroundColor = "#2b2c40")}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div
+            style={{
+              flex: 1,
+              overflow: "auto",
+              fontFamily: "monospace",
+              fontSize: "14px",
+              // 🎯 FIXED: Output color ab white (#fff) aayega, aur error par red.
+              color: isError ? "#ef4444" : "#fff",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {isLoading && (
+              <span style={{ color: "#9ca3af" }}>Running code...</span>
+            )}
+            {!isLoading && output}
+            {!isLoading && !output && (
+              <span style={{ color: "#4b5563" }}>
+                Output will appear here...
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Run button — full width bottom */}
-      <div className="runBtnRow">
-        <button className="btn runBtn" onClick={runCode} disabled={isLoading}>
-          {isLoading ? "Running..." : "▶ Run Code"}
+      {/* 🔵 BOTTOM: Run Button Row */}
+      <div
+        style={{
+          padding: "8px 16px",
+          borderTop: "1px solid #3d3e59",
+          backgroundColor: "#1e1e24",
+          display: "flex",
+          justifyContent: "flex-start",
+        }}
+      >
+        <button
+          onClick={runCode}
+          disabled={isLoading}
+          style={{
+            backgroundColor: "#22c55e",
+            color: "#000",
+            fontWeight: "bold",
+            border: "none",
+            padding: "8px 20px",
+            borderRadius: "6px",
+            cursor: isLoading ? "not-allowed" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "14px",
+          }}
+        >
+          {isLoading ? (
+            "⏳ Running..."
+          ) : (
+            <>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Run Code
+            </>
+          )}
         </button>
       </div>
     </div>
   );
 };
+
 export default Output;
