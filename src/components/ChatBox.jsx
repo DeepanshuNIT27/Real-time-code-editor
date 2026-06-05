@@ -6,7 +6,6 @@ const ChatBox = ({ socketRef, roomId, username }) => {
   const [messages, setMessages] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  // 🎯 FIX: Puraane ref ki jagah ab hum pure chat list container ka ref use karenge
   const chatMessagesRef = useRef(null);
   const pickerRef = useRef(null);
 
@@ -38,7 +37,7 @@ const ChatBox = ({ socketRef, roomId, username }) => {
     };
   }, []);
 
-  // 2. 🎯 FIX: Strictly chat container ke andar scroll karo (Main page bilkul nahi hilega)
+  // 2. Scroll to bottom automatically
   useEffect(() => {
     if (chatMessagesRef.current) {
       chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
@@ -81,7 +80,7 @@ const ChatBox = ({ socketRef, roomId, username }) => {
     setMessage((prev) => prev + emojiObject.emoji);
   };
 
-  // Helper function to generate consistent avatar background colors
+  // Avatar colors
   const getAvatarColor = (name) => {
     const colors = [
       "#ef4444",
@@ -108,9 +107,9 @@ const ChatBox = ({ socketRef, roomId, username }) => {
         backgroundColor: "#14141b",
       }}
     >
-      {/* 🟢 MESSAGES LIST (Ref updated here) */}
+      {/* 🟢 MESSAGES LIST */}
       <div
-        ref={chatMessagesRef} // 🎯 Ref assigned here
+        ref={chatMessagesRef}
         className="chatMessages"
         style={{
           padding: "16px",
@@ -139,7 +138,7 @@ const ChatBox = ({ socketRef, roomId, username }) => {
             key={index}
             style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}
           >
-            {/* Circular Avatar Logo */}
+            {/* Avatar */}
             <div
               style={{
                 width: "36px",
@@ -158,7 +157,7 @@ const ChatBox = ({ socketRef, roomId, username }) => {
               {msg.username.charAt(0).toUpperCase()}
             </div>
 
-            {/* Name, Time and Message Text */}
+            {/* Message Details */}
             <div
               style={{
                 display: "flex",
@@ -205,15 +204,18 @@ const ChatBox = ({ socketRef, roomId, username }) => {
         ))}
       </div>
 
-      {/* 🔵 INPUT AREA */}
+      {/* 🔵 UPGRADED INPUT AREA (Target Image Style) */}
       <div
         style={{
           display: "flex",
-          gap: "10px",
-          padding: "12px 16px",
+          gap: "8px",
+          padding: "12px",
           backgroundColor: "#1c1c27",
           borderTop: "1px solid #2d2d34",
           position: "relative",
+          width: "100%",
+          boxSizing: "border-box",
+          alignItems: "center",
         }}
       >
         {showEmojiPicker && (
@@ -236,23 +238,29 @@ const ChatBox = ({ socketRef, roomId, username }) => {
           </div>
         )}
 
+        {/* Emoji Button */}
         <button
           onClick={() => setShowEmojiPicker((prev) => !prev)}
           style={{
-            padding: "8px 12px",
-            borderRadius: "8px",
+            padding: "8px",
+            borderRadius: "50%",
             border: "none",
-            backgroundColor: "#2b2c40",
-            color: "#fff",
+            backgroundColor: "transparent",
+            color: "#888",
             cursor: "pointer",
-            fontSize: "18px",
+            fontSize: "20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             transition: "0.2s",
+            flexShrink: 0,
           }}
           title="Add Emoji"
         >
           😀
         </button>
 
+        {/* Pill-shaped Input Field */}
         <input
           type="text"
           placeholder="Type a message..."
@@ -261,31 +269,45 @@ const ChatBox = ({ socketRef, roomId, username }) => {
           onKeyPress={handleKeyPress}
           style={{
             flex: 1,
+            minWidth: 0,
             padding: "10px 14px",
-            borderRadius: "8px",
+            borderRadius: "20px",
             border: "1px solid #3d3e59",
-            backgroundColor: "#0d0d12",
+            backgroundColor: "#2a2b3d",
             color: "#fff",
             fontSize: "14px",
             outline: "none",
           }}
         />
 
+        {/* SVG Arrow Send Button */}
         <button
           onClick={sendMessage}
           style={{
-            padding: "0 20px",
-            borderRadius: "8px",
+            padding: "8px",
+            borderRadius: "50%",
             border: "none",
-            backgroundColor: "#22c55e",
-            color: "#fff",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-            transition: "0.2s",
+            backgroundColor: message.trim() ? "#4aed88" : "#2a2b3d",
+            color: message.trim() ? "#000" : "#888",
+            cursor: message.trim() ? "pointer" : "default",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "38px",
+            height: "38px",
+            transition: "0.3s ease",
+            flexShrink: 0,
           }}
+          disabled={!message.trim()}
         >
-          Send
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            style={{ width: "18px", height: "18px", marginLeft: "2px" }}
+          >
+            <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+          </svg>
         </button>
       </div>
     </div>

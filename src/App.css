@@ -370,7 +370,7 @@ footer a:hover {
 .editorWrap {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%; /* 🎯 FIX: 100vh se 100% kiya */
   overflow: hidden;
 }
 
@@ -455,9 +455,11 @@ footer a:hover {
 .chatBox {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  flex: 1;            /* 🎯 MAGIC FIX: Vertical jump hamesha ke liye band */
+  width: 100%;
   background: #1c1e29;
-  border-left: 1px solid #424242;
+  border-left: none;
+  overflow: hidden;
 }
 
 .chatMessages {
@@ -550,14 +552,20 @@ footer a:hover {
 .rightPanel {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  width: 300px;       /* 🎯 Failne se rokega */
+  min-width: 300px;   /* 🎯 Sikudne se rokega */
+  max-width: 300px;   /* 🎯 Strictly lock */
   background: #1c1e29;
   border-left: 1px solid #424242;
+  overflow: hidden;   /* 🎯 Jump hone se rokega */
 }
 
 .rightTabs {
   display: flex;
   border-bottom: 1px solid #424242;
+  flex-shrink: 0;       /* 🎯 MAGIC FIX: Tabs ko dabne/chhota hone se rokega */
+  min-height: 42px;     /* 🎯 MAGIC FIX: Height ekdum lock */
 }
 
 .rightTab {
@@ -758,6 +766,7 @@ footer a:hover {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: 100%;         /* 🎯 Strict lock */
 }
 
 .rightPanel {
@@ -765,8 +774,13 @@ footer a:hover {
 }
 
 .chatBox {
-  height: 100%;
+  display: flex;
+  flex-direction: column;
+  height: 100%;         /* 🎯 100vh nahi hoga */
+  width: 100%;
+  background: #1c1e29;
   border-left: none;
+  overflow: hidden;
 }
 
 /* WHITEBOARD PLACEHOLDER */
@@ -848,6 +862,7 @@ footer a:hover {
   display: flex;
   flex-direction: column;
   height: 100%;
+  width: 100%;
   overflow: hidden;
 }
 
