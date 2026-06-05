@@ -187,13 +187,12 @@ const EditorPageContent = ({ roomId, locationState }) => {
     };
   }, [roomId, locationState?.username, reactNavigator]);
 
-  // 🎯 PERMANENT LOGICAL FIX 1: Open file ke extension (.cpp, .py) ke hisab se language ID select karne ka structural function
   const getCurrentLanguageId = () => {
     const activeFile = files.find((f) => f.id === activeFileId);
-    if (!activeFile) return 71; // Fallback structure
+    if (!activeFile) return 71;
 
     const parts = activeFile.name.split(".");
-    const extension = parts[parts.length - 1]; // Extracted tag extension string tokens
+    const extension = parts[parts.length - 1];
 
     return extensionToLangMap[extension] || 71;
   };
@@ -347,32 +346,48 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   position: "relative",
                 }}
               >
-                {/* 🎯 NAYA WRAPPER: Yahan Editor ko screen share viewer ke andar wrap kiya hai */}
                 <RemoteScreenShareViewer>
-                  {activeLeftPanel === "editor" ? (
-                    <div
-                      className="editorArea"
-                      style={{ flex: 1, overflow: "auto" }}
-                    >
-                      {socketRef.current && (
-                        <Editor
-                          socketRef={socketRef}
-                          roomId={roomId}
-                          activeFileId={activeFileId}
-                          fileContent={
-                            files.find((f) => f.id === activeFileId)?.content ||
-                            ""
-                          }
-                          onCodeChange={(code) => {
-                            codeRef.current = code;
-                          }}
-                        />
-                      )}
-                    </div>
-                  ) : (
-                    // 🎯 PERMANENT LOGICAL FIX 2: Whiteboard ko structural synchronization parameters inject kar diye hain
+                  {/* 🎯 NAYA FIX: Dono components rendered hain, CSS se toggle honge */}
+
+                  {/* 1. Editor Section */}
+                  <div
+                    className="editorArea"
+                    style={{
+                      flex: 1,
+                      overflow: "auto",
+                      display: activeLeftPanel === "editor" ? "block" : "none",
+                      height: "100%",
+                    }}
+                  >
+                    {socketRef.current && (
+                      <Editor
+                        socketRef={socketRef}
+                        roomId={roomId}
+                        activeFileId={activeFileId}
+                        fileContent={
+                          files.find((f) => f.id === activeFileId)?.content ||
+                          ""
+                        }
+                        onCodeChange={(code) => {
+                          codeRef.current = code;
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* 2. Whiteboard Section */}
+                  <div
+                    className="whiteboardArea"
+                    style={{
+                      flex: 1,
+                      overflow: "hidden",
+                      display:
+                        activeLeftPanel === "whiteboard" ? "block" : "none",
+                      height: "100%",
+                    }}
+                  >
                     <Whiteboard socketRef={socketRef} roomId={roomId} />
-                  )}
+                  </div>
                 </RemoteScreenShareViewer>
               </div>
             </div>
@@ -386,7 +401,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
                 flexShrink: 0,
               }}
             >
-              {/* 🎯 PERMANENT LOGICAL FIX 3: Dynamic invocation handler assigned safely */}
               <Output
                 getCode={() => codeRef.current}
                 languageId={getCurrentLanguageId}
@@ -411,7 +425,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
               </button>
             </div>
 
-            {/* 🎯 SURGICAL FIX: Conditional rendering hatakar CSS hiding lagayi hai */}
             <div
               className="rightTabContent"
               style={{ flex: 1, overflow: "hidden" }}
