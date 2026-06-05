@@ -24,7 +24,7 @@ const io = new Server(server, {
 });
 app.use(express.static(path.join(__dirname, "dist")));
 
-// (Video token route same rahega...)
+// (Video token route)
 app.post("/api/video/token", async (req, res) => {
   try {
     const { userId } = req.body;
@@ -77,16 +77,36 @@ io.on("connection", (socket) => {
     socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { fileId, code });
   });
 
+  // 🎯 SURGICAL FIX: File System Synchronization Events Added Here
+  socket.on("file_create", ({ roomId, file }) => {
+    socket.in(roomId).emit("file_create", { file });
+  });
+
+  socket.on("file_delete", ({ roomId, fileId }) => {
+    socket.in(roomId).emit("file_delete", { fileId });
+  });
+
+  socket.on("file_switch", ({ roomId, fileId }) => {
+    socket.in(roomId).emit("file_switch", { fileId });
+  });
+
+  socket.on("panel_switch", ({ roomId, panel }) => {
+    socket.in(roomId).emit("panel_switch", { panel });
+  });
+
+  // Sync initial code for late joiners
+  socket.on(ACTIONS.SYNC_CODE, ({ socketId, code }) => {
+    io.to(socketId).emit(ACTIONS.CODE_CHANGE, { code });
+  });
+
   socket.on("whiteboard_draw", ({ roomId, delta }) => {
     socket.in(roomId).emit("whiteboard_draw_remote", { delta });
   });
 
-  // 🎯 FIX: 'socket.in' ki jagah 'io.in' kar diya. Ab message sabko jayega (Sender + Receiver)
   socket.on("send_message", ({ roomId, message, username }) => {
     io.in(roomId).emit("receive_message", { message, username });
   });
 
-  // ... (baki saare events same...)
   socket.on("disconnecting", () => {
     const rooms = [...socket.rooms];
     rooms.forEach((roomId) => {

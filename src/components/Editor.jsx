@@ -81,7 +81,13 @@ const Editor = ({
             code !== undefined
           ) {
             if (editorRef.current && editorRef.current.getValue() !== code) {
-              editorRef.current.setValue(code);
+              // 🎯 CURSOR FIX: Naya code set karne se pehle current user ka cursor save karo
+              const cursorPosition = editorRef.current.getCursor();
+
+              editorRef.current.setValue(code); // Code update karo
+
+              // 🎯 CURSOR FIX: Code update hone ke baad cursor ko wapas uski jagah set kar do
+              editorRef.current.setCursor(cursorPosition);
             }
           }
         });
