@@ -410,16 +410,33 @@ const EditorPageContent = ({ roomId, locationState }) => {
                 AI Assistant
               </button>
             </div>
-            <div className="rightTabContent">
-              {activeRightTab === "chat" ? (
+
+            {/* 🎯 SURGICAL FIX: Conditional rendering hatakar CSS hiding lagayi hai */}
+            <div
+              className="rightTabContent"
+              style={{ flex: 1, overflow: "hidden" }}
+            >
+              <div
+                style={{
+                  display: activeRightTab === "chat" ? "block" : "none",
+                  height: "100%",
+                }}
+              >
                 <ChatBox
                   socketRef={socketRef}
                   roomId={roomId}
                   username={locationState?.username}
                 />
-              ) : (
+              </div>
+
+              <div
+                style={{
+                  display: activeRightTab === "ai" ? "block" : "none",
+                  height: "100%",
+                }}
+              >
                 <AIChat getCode={() => codeRef.current} />
-              )}
+              </div>
             </div>
           </div>
         </div>
