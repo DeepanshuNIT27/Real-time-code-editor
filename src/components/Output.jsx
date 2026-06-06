@@ -25,8 +25,19 @@ const Output = ({ getCode, languageId }) => {
       setIsError(false);
       setOutput("");
 
+      //  UPDATE 1: Deployment par ENV variable missing hone par crash se bachane ke liye strict check
+      const judgeUrl = import.meta.env.VITE_JUDGE0_URL;
+      if (!judgeUrl) {
+        setOutput(
+          "System Error: VITE_JUDGE0_URL is missing in cloud environment variables!",
+        );
+        setIsError(true);
+        setIsLoading(false);
+        return;
+      }
+
       const submitResponse = await fetch(
-        `${import.meta.env.VITE_JUDGE0_URL}/submissions?base64_encoded=true&wait=true`,
+        `${judgeUrl}/submissions?base64_encoded=true&wait=true`,
         {
           method: "POST",
           headers: {
@@ -40,6 +51,11 @@ const Output = ({ getCode, languageId }) => {
           }),
         },
       );
+
+      // UPDATE 2: Agar API fail ho jaye toh JSON parse crash ko rokna
+      if (!submitResponse.ok) {
+        throw new Error(`API HTTP Error: ${submitResponse.status}`);
+      }
 
       const result = await submitResponse.json();
       console.log("Judge0 Response:", result);
@@ -59,14 +75,15 @@ const Output = ({ getCode, languageId }) => {
       }
     } catch (err) {
       console.error("Run code error:", err);
-      setOutput("Something went wrong! Check console.");
+      //  UPDATE 3: Catch block ko thoda descriptive banaya taaki live bug easily samajh aaye
+      setOutput(`Execution Failed: ${err.message}. Check browser console.`);
       setIsError(true);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 🎯 NAYA FUNCTION: Output clear karne ke liye
+  // NAYA FUNCTION: Output clear karne ke liye
   const clearOutput = () => {
     setOutput("");
     setIsError(false);
@@ -83,7 +100,7 @@ const Output = ({ getCode, languageId }) => {
         color: "#fff",
       }}
     >
-      {/* 🟢 MAIN 50-50 SPLIT AREA */}
+      {/*  MAIN 50-50 SPLIT AREA */}
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* LEFT: Input Column */}
         <div
@@ -179,7 +196,7 @@ const Output = ({ getCode, languageId }) => {
               overflow: "auto",
               fontFamily: "monospace",
               fontSize: "14px",
-              // 🎯 FIXED: Output color ab white (#fff) aayega, aur error par red.
+              // FIXED: Output color ab white (#fff) aayega, aur error par red.
               color: isError ? "#ef4444" : "#fff",
               whiteSpace: "pre-wrap",
             }}
@@ -197,7 +214,7 @@ const Output = ({ getCode, languageId }) => {
         </div>
       </div>
 
-      {/* 🔵 BOTTOM: Run Button Row */}
+      {/*  BOTTOM: Run Button Row */}
       <div
         style={{
           padding: "8px 16px",
