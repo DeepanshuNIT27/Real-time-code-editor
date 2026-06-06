@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@stream-io/node-sdk": "^0.7.59",
     "@stream-io/video-react-sdk": "^1.37.4",
     "codemirror": "^5.65.21",
@@ -25,7 +26,6 @@
     "react-router-dom": "^7.15.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
-    "tldraw": "^5.0.1",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
