@@ -6,10 +6,11 @@ export const initSocket = async () => {
     reconnectionAttempts: Infinity,
     timeout: 10000,
     transports: ["polling", "websocket"],
+    // ⭐ UPDATE: Sirf ye line add ki, baki structure same rakha hai
+    withCredentials: true,
   };
 
-
-  return new Promise((resolve, reject) => { 
+  return new Promise((resolve, reject) => {
     const socket = io(import.meta.env.VITE_BACKEND_URL, options);
 
     // Only resolve after socket is truly connected
