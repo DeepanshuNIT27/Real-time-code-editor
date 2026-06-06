@@ -17,6 +17,12 @@ const Editor = ({
   const editorRef = useRef(null);
   const activeFileIdRef = useRef(activeFileId);
 
+  // ⭐ UPDATE 1: onCodeChange ko dependency cycle se bachane ke liye ref me store kiya
+  const onCodeChangeRef = useRef(onCodeChange);
+  useEffect(() => {
+    onCodeChangeRef.current = onCodeChange;
+  }, [onCodeChange]);
+
   // Keep ref synchronized with the latest active file identifier safely
   useEffect(() => {
     activeFileIdRef.current = activeFileId;
@@ -24,6 +30,25 @@ const Editor = ({
 
   useEffect(() => {
     let currentSocket = socketRef.current;
+
+    // ⭐ UPDATE 2: Listener ko alag function banaya taaki cleanup perfectly ho sake
+    const handleRemoteCodeChange = ({ fileId, code }) => {
+      if (
+        fileId === activeFileIdRef.current &&
+        code !== null &&
+        code !== undefined
+      ) {
+        if (editorRef.current && editorRef.current.getValue() !== code) {
+          // 🎯 CURSOR FIX: Naya code set karne se pehle current user ka cursor save karo
+          const cursorPosition = editorRef.current.getCursor();
+
+          editorRef.current.setValue(code); // Code update karo
+
+          // 🎯 CURSOR FIX: Code update hone ke baad cursor ko wapas uski jagah set kar do
+          editorRef.current.setCursor(cursorPosition);
+        }
+      }
+    };
 
     async function init() {
       editorRef.current = CodeMirror.fromTextArea(
@@ -53,7 +78,10 @@ const Editor = ({
         const code = instance.getValue();
 
         // Propagate current string snapshot to parent container state
-        onCodeChange(code);
+        // ⭐ UPDATE 3: Direct function ki jagah ref ka use karke call kiya
+        if (onCodeChangeRef.current) {
+          onCodeChangeRef.current(code);
+        }
 
         if (origin !== "setValue") {
           localStorage.setItem(
@@ -74,23 +102,7 @@ const Editor = ({
 
       // 🎯 FIX 2: Dynamic listener validation maps transmission payload directly to matching scoped file streams
       if (socketRef.current) {
-        socketRef.current.on(ACTIONS.CODE_CHANGE, ({ fileId, code }) => {
-          if (
-            fileId === activeFileIdRef.current &&
-            code !== null &&
-            code !== undefined
-          ) {
-            if (editorRef.current && editorRef.current.getValue() !== code) {
-              // 🎯 CURSOR FIX: Naya code set karne se pehle current user ka cursor save karo
-              const cursorPosition = editorRef.current.getCursor();
-
-              editorRef.current.setValue(code); // Code update karo
-
-              // 🎯 CURSOR FIX: Code update hone ke baad cursor ko wapas uski jagah set kar do
-              editorRef.current.setCursor(cursorPosition);
-            }
-          }
-        });
+        socketRef.current.on(ACTIONS.CODE_CHANGE, handleRemoteCodeChange);
       }
     }
 
@@ -99,39 +111,42 @@ const Editor = ({
     // 🎯 FIX 3: Leak-proof absolute structural unmounting isolation cleanup
     return () => {
       if (currentSocket) {
-        currentSocket.off(ACTIONS.CODE_CHANGE);
+        // ⭐ UPDATE 4: Sirf is component ka listener hataya taaki dusre components break na ho
+        currentSocket.off(ACTIONS.CODE_CHANGE, handleRemoteCodeChange);
       }
       if (editorRef.current) {
         editorRef.current.toTextArea();
         editorRef.current = null;
       }
     };
-  }, [roomId, onCodeChange, socketRef]);
+
+    // ⭐ UPDATE 5: onCodeChange ko dependencies se hata diya taaki keystrokes par editor re-mount/freeze na ho
+  }, [roomId, socketRef]);
 
   // File transition swap operational view hook loader
- useEffect(() => {
-   if (editorRef.current) {
-     // 1. Switch karne se pehle purana content save karo
-     // activeFileIdRef.current abhi bhi purani file ki ID hold kar raha hai
-     const currentCode = editorRef.current.getValue();
-     localStorage.setItem(
-       `code-${roomId}-${activeFileIdRef.current}`,
-       currentCode,
-     );
+  useEffect(() => {
+    if (editorRef.current) {
+      // 1. Switch karne se pehle purana content save karo
+      // activeFileIdRef.current abhi bhi purani file ki ID hold kar raha hai
+      const currentCode = editorRef.current.getValue();
+      localStorage.setItem(
+        `code-${roomId}-${activeFileIdRef.current}`,
+        currentCode,
+      );
 
-     // 2. Nayi file ka content load karo
-     const savedCode = localStorage.getItem(`code-${roomId}-${activeFileId}`);
-     const contentToLoad = savedCode !== null ? savedCode : fileContent || "";
+      // 2. Nayi file ka content load karo
+      const savedCode = localStorage.getItem(`code-${roomId}-${activeFileId}`);
+      const contentToLoad = savedCode !== null ? savedCode : fileContent || "";
 
-     // 3. Editor update karo
-     if (editorRef.current.getValue() !== contentToLoad) {
-       editorRef.current.setValue(contentToLoad);
-     }
+      // 3. Editor update karo
+      if (editorRef.current.getValue() !== contentToLoad) {
+        editorRef.current.setValue(contentToLoad);
+      }
 
-     // 4. Ref update karo (taaki agle switch ke liye ye purani ban jaye)
-     activeFileIdRef.current = activeFileId;
-   }
- }, [activeFileId, roomId, fileContent]);
+      // 4. Ref update karo (taaki agle switch ke liye ye purani ban jaye)
+      activeFileIdRef.current = activeFileId;
+    }
+  }, [activeFileId, roomId, fileContent]);
 
   // 🎯 FIX 4: Yeh function editor ke andar dabaaye gaye Spacebar keyboard click ko global browser tak pahuche se strictly BLOCK karega!
   const handleEditorKeyDown = (e) => {
