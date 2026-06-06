@@ -75,7 +75,7 @@ const Whiteboard = ({ socketRef, roomId }) => {
       // Throttle emit to ~30 FPS
       throttleTimeoutRef.current = setTimeout(() => {
         throttledEmit(elements);
-      }, 30);
+      }, 100);
     }
   };
 

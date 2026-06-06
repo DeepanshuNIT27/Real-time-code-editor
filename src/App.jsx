@@ -3,7 +3,7 @@ import { Toaster } from "react-hot-toast";
 import Home from "./pages/Home";
 import EditorPage from "./pages/EditorPage";
 import "./App.css";
-
+import "@excalidraw/excalidraw/index.css";
 function App() {
   return (
     <>
