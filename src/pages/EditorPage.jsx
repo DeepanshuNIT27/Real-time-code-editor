@@ -344,6 +344,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   flex: 1,
                   backgroundColor: "#1e1e24",
                   position: "relative",
+                  minHeight: 0, // <--- YE ADD KARO
                 }}
               >
                 <RemoteScreenShareViewer>
@@ -384,6 +385,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                       display:
                         activeLeftPanel === "whiteboard" ? "block" : "none",
                       height: "100%",
+                      minHeight: 0, // <--- YE ADD KARO
                     }}
                   >
                     <Whiteboard socketRef={socketRef} roomId={roomId} />
