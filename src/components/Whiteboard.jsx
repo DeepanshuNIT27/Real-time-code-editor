@@ -8,6 +8,9 @@ const Whiteboard = ({ socketRef, roomId }) => {
   const isRemoteUpdateRef = useRef(false);
   const throttleTimeoutRef = useRef(null);
 
+  // UPDATE: Har micro-second ke latest coordinates ko track karne ke liye ref add kiya
+  const latestElementsRef = useRef(null);
+
   const throttledEmit = useCallback(
     (elements) => {
       if (!socketRef.current) return;
@@ -46,11 +49,17 @@ const Whiteboard = ({ socketRef, roomId }) => {
     const currentVersion = getSceneVersion(elements);
     if (currentVersion > lastSceneVersionRef.current) {
       lastSceneVersionRef.current = currentVersion;
-      if (throttleTimeoutRef.current) clearTimeout(throttleTimeoutRef.current);
-      throttleTimeoutRef.current = setTimeout(
-        () => throttledEmit(elements),
-        100,
-      );
+
+      latestElementsRef.current = elements;
+
+      //  UPDATE: Yahan se clearTimeout hataya, real Throttle lagaya,
+      // aur latestElementsRef.current ko emit kiya taaki continuous line bane.
+      if (!throttleTimeoutRef.current) {
+        throttleTimeoutRef.current = setTimeout(() => {
+          throttledEmit(latestElementsRef.current);
+          throttleTimeoutRef.current = null;
+        }, 50);
+      }
     }
   };
 
