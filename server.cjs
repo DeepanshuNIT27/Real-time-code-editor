@@ -13,7 +13,7 @@ const server = http.createServer(app);
 // CORS fix for production
 app.use(
   cors({
-    origin: "*",
+    origin: true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   }),
@@ -21,7 +21,7 @@ app.use(
 app.use(express.json());
 
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+  cors: { origin: true, credentials: true, methods: ["GET", "POST"] },
 });
 app.use(express.static(path.join(__dirname, "dist")));
 
