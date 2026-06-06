@@ -53,8 +53,8 @@ const FilePanel = ({
   onFileCreate,
   onFileDelete,
 }) => {
-  const [newFileName, setNewFileName] = useState("");
-  const [showInput, setShowInput] = useState(false);
+  const [newFileName, useState] = React.useState("");
+  const [showInput, setShowInput] = React.useState(false);
 
   const handleCreate = () => {
     const trimmedName = newFileName.trim();
@@ -86,7 +86,8 @@ const FilePanel = ({
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        selectZone: "none",
+        // ⭐ UPDATE 1: selectZone typo ko theek kiya standard CSS ke liye
+        userSelect: "none",
       }}
     >
       {/* 2. HEADER SECTION: Spaced out row layout */}
@@ -249,6 +250,13 @@ const FilePanel = ({
                   className="fileDeleteBtn"
                   onClick={(e) => {
                     e.stopPropagation();
+                    // ⭐ UPDATE 2: Active file delete hone se roka taaki component crash na ho
+                    if (isActive) {
+                      alert(
+                        "You cannot delete the file you are currently viewing. Please switch to another file first.",
+                      );
+                      return;
+                    }
                     onFileDelete(file.id);
                   }}
                   style={{
