@@ -1,28 +1,33 @@
 import React, { useEffect, useRef } from "react";
-import { Excalidraw } from "@excalidraw/excalidraw";
+import { Tldraw } from "tldraw";
+import "tldraw/tldraw.css"; // 🔥 Ye line design tootne se bachayegi!
 
 const Whiteboard = ({ socketRef, roomId }) => {
-  const excalidrawAPIRef = useRef(null);
-  const isUpdatingRef = useRef(false);
-  const previousElementsRef = useRef([]);
+  const editorRef = useRef(null);
 
   useEffect(() => {
     if (!socketRef || !socketRef.current) return;
     const socket = socketRef.current;
 
     const handleRemoteDraw = ({ delta }) => {
-      if (!excalidrawAPIRef.current || !delta) return;
+      if (!editorRef.current || !delta) return;
 
-      // 🎯 FIX: delta ab Excalidraw ke elements ka array hai (Backend same rahega)
-      isUpdatingRef.current = true;
-      excalidrawAPIRef.current.updateScene({
-        elements: delta,
+      editorRef.current.store.mergeRemoteChanges(() => {
+        if (delta.added && Object.keys(delta.added).length > 0) {
+          editorRef.current.store.put(Object.values(delta.added));
+        }
+
+        if (delta.updated && Object.keys(delta.updated).length > 0) {
+          const updatedRecords = Object.values(delta.updated).map((u) => {
+            return Array.isArray(u) ? u[1] : u.to || u;
+          });
+          editorRef.current.store.put(updatedRecords.filter(Boolean));
+        }
+
+        if (delta.removed && Object.keys(delta.removed).length > 0) {
+          editorRef.current.store.remove(Object.keys(delta.removed));
+        }
       });
-
-      // Remote update apply hone ke baad flag reset kar do
-      setTimeout(() => {
-        isUpdatingRef.current = false;
-      }, 50);
     };
 
     socket.on("whiteboard_draw_remote", handleRemoteDraw);
@@ -32,38 +37,34 @@ const Whiteboard = ({ socketRef, roomId }) => {
     };
   }, [socketRef]);
 
-  const handleChange = (elements, appState) => {
-    // Agar change kisi aur user ne bheja hai, toh wapas emit mat karo (prevents infinite loop)
-    if (isUpdatingRef.current) return;
+  const handleMount = (editor) => {
+    editorRef.current = editor;
+    editor.store.listen(
+      (update) => {
+        if (update.source !== "user") return;
 
-    // 🎯 FIX: Tldraw ke 'scope: document' ki tarah, yahan hum check kar rahe hain
-    // ki sirf lines aur shapes change ho, camera/zoom change hone par socket sync na ho.
-    const hasChanged =
-      elements.length !== previousElementsRef.current.length ||
-      elements.some((el, i) => {
-        const prev = previousElementsRef.current[i];
-        return !prev || prev.version !== el.version;
-      });
+        const { added, updated, removed } = update.changes;
 
-    if (hasChanged) {
-      previousElementsRef.current = elements;
-      socketRef.current.emit("whiteboard_draw", {
-        roomId,
-        delta: elements, // Backend ko pata bhi nahi chalega ki humne Tldraw hata diya hai 😎
-      });
-    }
+        const hasChanges =
+          Object.keys(added).length > 0 ||
+          Object.keys(updated).length > 0 ||
+          Object.keys(removed).length > 0;
+
+        if (hasChanges) {
+          socketRef.current.emit("whiteboard_draw", {
+            roomId,
+            delta: { added, updated, removed },
+          });
+        }
+      },
+      { scope: "document" },
+    );
   };
 
   return (
-    <div
-      className="whiteboard-container"
-      style={{ width: "100%", height: "100%", position: "relative" }}
-    >
-      <Excalidraw
-        excalidrawAPI={(api) => (excalidrawAPIRef.current = api)}
-        onChange={handleChange}
-        theme="dark" // inferDarkMode ki jagah Tldraw ka alternative
-      />
+    // 🔥 Pehle blank screen aane ka reason ye div tha jiski height set nahi thi
+    <div style={{ width: "100%", height: "100vh", position: "relative" }}>
+      <Tldraw inferDarkMode onMount={handleMount} />
     </div>
   );
 };
