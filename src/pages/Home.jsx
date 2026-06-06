@@ -30,9 +30,8 @@ const Home = () => {
     });
   };
 
-  const handleInputEnter = (e) =>{
-
-    if(e.key === 'Enter'){
+  const handleInputEnter = (e) => {
+    if (e.key === "Enter") {
       joinRoom();
     }
   };
