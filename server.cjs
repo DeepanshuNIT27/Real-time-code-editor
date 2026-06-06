@@ -10,9 +10,10 @@ require("dotenv").config();
 
 const server = http.createServer(app);
 
+// CORS fix for production
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "*",
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   }),

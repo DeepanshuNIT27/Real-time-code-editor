@@ -22,7 +22,11 @@ export const VideoCallProvider = ({ children, userId, userName, roomId }) => {
 
     const initVideoCall = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/video/token`, {
+        // ✅ FIX: Dynamic URL use kiya hai jo Render pe apne aap adjust ho jayega
+        const BACKEND_URL =
+          import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+
+        const response = await fetch(`${BACKEND_URL}/api/video/token`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
