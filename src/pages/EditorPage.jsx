@@ -14,7 +14,7 @@ import { initSocket } from "../socket.js";
 // Safe wrapper injection layer imports
 import { VideoCallProvider } from "../context/VideoCallContext.jsx";
 import VideoContainer from "../components/VideoContainer.jsx";
-import { useCallStateHooks } from "@stream-io/video-react-sdk"; // 🎯 FIX: Screen state padhne ke liye naya import
+import { useCallStateHooks } from "@stream-io/video-react-sdk"; //  FIX: Screen state padhne ke liye naya import
 
 import {
   useLocation,
@@ -33,7 +33,7 @@ const extensionToLangMap = {
   rb: 72,
 };
 
-// 🎯 NAYA COMPONENT: Dusre (remote) users ki screen share ko editor ki jagah badi dikhane ke liye
+// NAYA COMPONENT: Dusre (remote) users ki screen share ko editor ki jagah badi dikhane ke liye
 const RemoteScreenShareViewer = ({ children }) => {
   const { useParticipants } = useCallStateHooks();
   const participants = useParticipants();
@@ -72,7 +72,7 @@ const RemoteScreenShareViewer = ({ children }) => {
             boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
           }}
         >
-          👁️ Viewing {remoteSharer.name || "Remote User"}'s Screen
+          Viewing {remoteSharer.name || "Remote User"}'s Screen
         </div>
         <video
           autoPlay
@@ -91,7 +91,7 @@ const RemoteScreenShareViewer = ({ children }) => {
   return children;
 };
 
-// 🎯 FIX 1: Parent component context lifting shell setup
+// FIX 1: Parent component context lifting shell setup
 const EditorPage = () => {
   const location = useLocation();
   const { roomId } = useParams();
@@ -118,8 +118,19 @@ const EditorPageContent = ({ roomId, locationState }) => {
   const [activeFileId, setActiveFileId] = useState("1");
 
   useEffect(() => {
+    // UPDATE 1: Duplicate ghost users ko join hone se rokne ke liye ek isMounted flag add kiya
+    let isMounted = true;
+
     const init = async () => {
-      socketRef.current = await initSocket();
+      const socket = await initSocket();
+
+      //  UPDATE 2: Agar network lag ki wajah se component unmount ho chuka hai, toh delay se aane wale socket ko cancel (disconnect) kar do taaki leak na ho
+      if (!isMounted) {
+        socket.disconnect();
+        return;
+      }
+
+      socketRef.current = socket;
 
       if (socketRef.current && socketRef.current.id) {
         setCurrentSocketId(socketRef.current.id);
@@ -177,6 +188,8 @@ const EditorPageContent = ({ roomId, locationState }) => {
     init();
 
     return () => {
+      //  UPDATE 3: Component unmount hote hi flag false kar do taaki pending promises dead ho jayein
+      isMounted = false;
       socketRef.current?.disconnect();
       socketRef.current?.off(ACTIONS.JOINED);
       socketRef.current?.off(ACTIONS.DISCONNECTED);
@@ -226,7 +239,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
           overflow: "hidden",
         }}
       >
-        {/* 🟢 TOP BAR */}
+        {/*  TOP BAR */}
         <header className="topBar" style={{ flexShrink: 0 }}>
           <div className="topBarLeft">
             <img className="topLogo" src="/code-sync.png" alt="logo" />
@@ -282,7 +295,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
           </div>
         </header>
 
-        {/* 🔵 CENTER WORKSPACE SYSTEM AREA */}
+        {/* CENTER WORKSPACE SYSTEM AREA */}
         <div
           className="mainContent"
           style={{ flex: 1, overflow: "hidden", display: "flex" }}
@@ -305,7 +318,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                 files={files}
                 activeFileId={activeFileId}
                 onFileSelect={(fileId) => {
-                  if (fileId === activeFileId) return; // 🛑 Agar wahi file khuli hai, toh kuch mat karo
+                  if (fileId === activeFileId) return; //  Agar wahi file khuli hai, toh kuch mat karo
 
                   // 1. Current Editor ka code memory (files array) mein save karo
                   const currentMemoryCode = codeRef.current || "";
@@ -355,7 +368,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                 }}
               >
                 <RemoteScreenShareViewer>
-                  {/* 🎯 NAYA FIX: Dono components rendered hain, CSS se toggle honge */}
+                  {/* NAYA FIX: Dono components rendered hain, CSS se toggle honge */}
 
                   {/* 1. Editor Section */}
                   <div
@@ -393,7 +406,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                         activeLeftPanel === "whiteboard" ? "block" : "none",
                       height: "100%",
                       minHeight: 0,
-                      position: "relative", // 🎯 YE ADD KARO: Iske bina icons boundary se bahar leak honge
+                      position: "relative", //  YE ADD KARO: Iske bina icons boundary se bahar leak honge
                     }}
                   >
                     <Whiteboard socketRef={socketRef} roomId={roomId} />
@@ -402,7 +415,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
               </div>
             </div>
 
-            {/* 🔴 OUTPUT COMPILER ARTIFACT MOUNT LAYER */}
+            {/*  OUTPUT COMPILER ARTIFACT MOUNT LAYER */}
             <div
               className="outputSectionWrapper"
               style={{
@@ -464,7 +477,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
           </div>
         </div>
 
-        {/* 🟠 BOTTOM PANEL WITH SEALED PROVIDER CONTROLS */}
+        {/*  BOTTOM PANEL WITH SEALED PROVIDER CONTROLS */}
         <div
           className="bottomBar"
           style={{
