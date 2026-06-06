@@ -385,7 +385,8 @@ const EditorPageContent = ({ roomId, locationState }) => {
                       display:
                         activeLeftPanel === "whiteboard" ? "block" : "none",
                       height: "100%",
-                      minHeight: 0, // <--- YE ADD KARO
+                      minHeight: 0,
+                      position: "relative", // 🎯 YE ADD KARO: Iske bina icons boundary se bahar leak honge
                     }}
                   >
                     <Whiteboard socketRef={socketRef} roomId={roomId} />

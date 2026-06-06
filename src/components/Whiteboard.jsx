@@ -60,15 +60,13 @@ const Whiteboard = ({ socketRef, roomId }) => {
         height: "100%",
         width: "100%",
         position: "relative",
-        overflow: "hidden",
+        overflow: "hidden", // Ye icons ko bahar jane se rokega
       }}
     >
       <Excalidraw
         excalidrawAPI={(api) => setExcalidrawAPI(api)}
         onChange={handleChange}
         theme="light"
-        viewModeEnabled={false}
-        zenModeEnabled={false}
       />
     </div>
   );
