@@ -1,33 +1,50 @@
-import React, { useEffect, useRef } from "react";
-import { Tldraw } from "tldraw";
-import "tldraw/tldraw.css"; // 🔥 Ye line design tootne se bachayegi!
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import { Excalidraw, getSceneVersion } from "@excalidraw/excalidraw";
 
 const Whiteboard = ({ socketRef, roomId }) => {
-  const editorRef = useRef(null);
+  const [excalidrawAPI, setExcalidrawAPI] = useState(null);
 
+  // References for tracking state efficiently
+  const lastSceneVersionRef = useRef(0);
+  const isRemoteUpdateRef = useRef(false);
+  const throttleTimeoutRef = useRef(null);
+
+  // 🎯 THROTTLING FIX: Sending data safely to server without overload
+  const throttledEmit = useCallback(
+    (elements) => {
+      if (!socketRef.current) return;
+      socketRef.current.emit("whiteboard_draw", {
+        roomId,
+        delta: elements,
+      });
+    },
+    [roomId, socketRef],
+  );
+
+  // 🎯 CLEANUP FIX: Prevents memory leaks when user closes the whiteboard
   useEffect(() => {
-    if (!socketRef || !socketRef.current) return;
+    return () => {
+      if (throttleTimeoutRef.current) {
+        clearTimeout(throttleTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Socket Listener: Receiving remote user's drawing
+  useEffect(() => {
+    if (!socketRef || !socketRef.current || !excalidrawAPI) return;
+
     const socket = socketRef.current;
 
     const handleRemoteDraw = ({ delta }) => {
-      if (!editorRef.current || !delta) return;
+      if (!delta || delta.length === 0) return;
 
-      editorRef.current.store.mergeRemoteChanges(() => {
-        if (delta.added && Object.keys(delta.added).length > 0) {
-          editorRef.current.store.put(Object.values(delta.added));
-        }
+      // 🎯 INFINITE LOOP FIX: Mark as remote update
+      isRemoteUpdateRef.current = true;
+      excalidrawAPI.updateScene({ elements: delta });
 
-        if (delta.updated && Object.keys(delta.updated).length > 0) {
-          const updatedRecords = Object.values(delta.updated).map((u) => {
-            return Array.isArray(u) ? u[1] : u.to || u;
-          });
-          editorRef.current.store.put(updatedRecords.filter(Boolean));
-        }
-
-        if (delta.removed && Object.keys(delta.removed).length > 0) {
-          editorRef.current.store.remove(Object.keys(delta.removed));
-        }
-      });
+      // Update local version so we don't re-emit this change
+      lastSceneVersionRef.current = getSceneVersion(delta);
     };
 
     socket.on("whiteboard_draw_remote", handleRemoteDraw);
@@ -35,36 +52,49 @@ const Whiteboard = ({ socketRef, roomId }) => {
     return () => {
       socket.off("whiteboard_draw_remote", handleRemoteDraw);
     };
-  }, [socketRef]);
+  }, [socketRef, excalidrawAPI]);
 
-  const handleMount = (editor) => {
-    editorRef.current = editor;
-    editor.store.listen(
-      (update) => {
-        if (update.source !== "user") return;
+  // Local user drawing handler
+  const handleChange = (elements) => {
+    // If it's a remote update, just reset the flag and ignore
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
+      return;
+    }
 
-        const { added, updated, removed } = update.changes;
+    // 🎯 CHANGE DETECTION FIX: Only process if there's a real structural change
+    const currentVersion = getSceneVersion(elements);
 
-        const hasChanges =
-          Object.keys(added).length > 0 ||
-          Object.keys(updated).length > 0 ||
-          Object.keys(removed).length > 0;
+    if (currentVersion > lastSceneVersionRef.current) {
+      lastSceneVersionRef.current = currentVersion;
 
-        if (hasChanges) {
-          socketRef.current.emit("whiteboard_draw", {
-            roomId,
-            delta: { added, updated, removed },
-          });
-        }
-      },
-      { scope: "document" },
-    );
+      if (throttleTimeoutRef.current) {
+        clearTimeout(throttleTimeoutRef.current);
+      }
+
+      // Throttle emit to ~30 FPS
+      throttleTimeoutRef.current = setTimeout(() => {
+        throttledEmit(elements);
+      }, 30);
+    }
   };
 
   return (
-    // 🔥 Pehle blank screen aane ka reason ye div tha jiski height set nahi thi
-    <div style={{ width: "100%", height: "100vh", position: "relative" }}>
-      <Tldraw inferDarkMode onMount={handleMount} />
+    // 🎯 UI CONTAINER FIX: Bulletproof styling to avoid huge icons
+    <div
+      style={{
+        height: "100%",
+        width: "100%",
+        position: "absolute",
+        top: 0,
+        left: 0,
+      }}
+    >
+      <Excalidraw
+        excalidrawAPI={(api) => setExcalidrawAPI(api)}
+        onChange={handleChange}
+        theme="dark"
+      />
     </div>
   );
 };
