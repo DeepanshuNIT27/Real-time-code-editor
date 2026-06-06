@@ -109,21 +109,29 @@ const Editor = ({
   }, [roomId, onCodeChange, socketRef]);
 
   // File transition swap operational view hook loader
-  useEffect(() => {
-    if (editorRef.current) {
-      const savedCode = localStorage.getItem(`code-${roomId}-${activeFileId}`);
+ useEffect(() => {
+   if (editorRef.current) {
+     // 1. Switch karne se pehle purana content save karo
+     // activeFileIdRef.current abhi bhi purani file ki ID hold kar raha hai
+     const currentCode = editorRef.current.getValue();
+     localStorage.setItem(
+       `code-${roomId}-${activeFileIdRef.current}`,
+       currentCode,
+     );
 
-      if (savedCode !== null) {
-        if (editorRef.current.getValue() !== savedCode) {
-          editorRef.current.setValue(savedCode);
-        }
-      } else {
-        if (editorRef.current.getValue() !== fileContent) {
-          editorRef.current.setValue(fileContent || "");
-        }
-      }
-    }
-  }, [activeFileId, roomId, fileContent]);
+     // 2. Nayi file ka content load karo
+     const savedCode = localStorage.getItem(`code-${roomId}-${activeFileId}`);
+     const contentToLoad = savedCode !== null ? savedCode : fileContent || "";
+
+     // 3. Editor update karo
+     if (editorRef.current.getValue() !== contentToLoad) {
+       editorRef.current.setValue(contentToLoad);
+     }
+
+     // 4. Ref update karo (taaki agle switch ke liye ye purani ban jaye)
+     activeFileIdRef.current = activeFileId;
+   }
+ }, [activeFileId, roomId, fileContent]);
 
   // 🎯 FIX 4: Yeh function editor ke andar dabaaye gaye Spacebar keyboard click ko global browser tak pahuche se strictly BLOCK karega!
   const handleEditorKeyDown = (e) => {

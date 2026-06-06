@@ -305,15 +305,22 @@ const EditorPageContent = ({ roomId, locationState }) => {
                 files={files}
                 activeFileId={activeFileId}
                 onFileSelect={(fileId) => {
+                  if (fileId === activeFileId) return; // 🛑 Agar wahi file khuli hai, toh kuch mat karo
+
+                  // 1. Current Editor ka code memory (files array) mein save karo
                   const currentMemoryCode = codeRef.current || "";
-                  setFiles((p) =>
-                    p.map((f) =>
+                  setFiles((prev) =>
+                    prev.map((f) =>
                       f.id === activeFileId
                         ? { ...f, content: currentMemoryCode }
                         : f,
                     ),
                   );
+
+                  // 2. Active file change karo
                   setActiveFileId(fileId);
+
+                  // 3. Socket ko batayo
                   socketRef.current.emit("file_switch", { roomId, fileId });
                 }}
                 onFileCreate={(name) => {
