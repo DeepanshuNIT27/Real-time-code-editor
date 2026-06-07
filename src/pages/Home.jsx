@@ -17,15 +17,19 @@ const Home = () => {
   };
 
   const joinRoom = () => {
-    if (!roomId || !username) {
+    // UPDATE: Added .trim() to fix copy-paste invisible space bugs
+    const safeRoomId = roomId.trim();
+    const safeUsername = username.trim();
+
+    if (!safeRoomId || !safeUsername) {
       toast.error("Room ID & username is required");
       return;
     }
 
     // redirect
-    navigate(`/editor/${roomId}`, {
+    navigate(`/editor/${safeRoomId}`, {
       state: {
-        username,
+        username: safeUsername,
       },
     });
   };
