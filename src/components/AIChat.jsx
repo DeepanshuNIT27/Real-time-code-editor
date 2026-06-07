@@ -27,6 +27,21 @@ const AIChat = ({ getCode, selectedLanguage }) => {
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
+    // UPDATE 1: Deployment par API key missing hone par gracefully handle karna
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "System Error: VITE_GEMINI_API_KEY is missing in cloud environment variables!",
+        },
+      ]);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const currentCode = getCode();
 
@@ -43,7 +58,8 @@ User question: ${userMessage}
 Give a helpful, concise response. If asked for hints only give hints, if asked for solution give solution.`;
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
+        //  UPDATE 2: Hardcoded variable ki jagah safely apiKey use kiya
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -52,6 +68,12 @@ Give a helpful, concise response. If asked for hints only give hints, if asked f
           }),
         },
       );
+
+      //  UPDATE 3: Agar API limit cross ho jaye ya model error de, toh usko catch block me bhejna
+      if (!response.ok) {
+        throw new Error(`API returned status: ${response.status}`);
+      }
+
       const data = await response.json();
       console.log("Gemini Response:", data);
       const aiResponse =
