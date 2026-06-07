@@ -11,6 +11,8 @@ const ChatBox = ({ socketRef, roomId, username }) => {
 
   // 1. Listen for incoming messages
   useEffect(() => {
+    let interval; // UPDATE 1: Interval ko bahar declare kiya taaki attach hone par usko rok sakein
+
     const attachListener = () => {
       if (
         socketRef.current &&
@@ -23,10 +25,13 @@ const ChatBox = ({ socketRef, roomId, username }) => {
           });
           setMessages((prev) => [...prev, { ...data, time: currentTime }]);
         });
+
+        //  UPDATE 2: Listener attach hote hi background interval ko rok do (Memory Leak aur Duplicate messages fixed!)
+        clearInterval(interval);
       }
     };
 
-    const interval = setInterval(attachListener, 500);
+    interval = setInterval(attachListener, 500);
     attachListener();
 
     return () => {
@@ -107,7 +112,7 @@ const ChatBox = ({ socketRef, roomId, username }) => {
         backgroundColor: "#14141b",
       }}
     >
-      {/* 🟢 MESSAGES LIST */}
+      {/*  MESSAGES LIST */}
       <div
         ref={chatMessagesRef}
         className="chatMessages"
