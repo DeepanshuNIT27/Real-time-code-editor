@@ -14,7 +14,7 @@ import { initSocket } from "../socket.js";
 // Safe wrapper injection layer imports
 import { VideoCallProvider } from "../context/VideoCallContext.jsx";
 import VideoContainer from "../components/VideoContainer.jsx";
-import { useCallStateHooks } from "@stream-io/video-react-sdk"; //  FIX: Screen state padhne ke liye naya import
+import { useCallStateHooks } from "@stream-io/video-react-sdk";
 
 import {
   useLocation,
@@ -117,14 +117,24 @@ const EditorPageContent = ({ roomId, locationState }) => {
   ]);
   const [activeFileId, setActiveFileId] = useState("1");
 
+  //  MASTER FIX 1: Socket ke andar fresh state access karne ke liye refs lagaye (Stale Closure fix)
+  const filesRef = useRef(files);
+  const activeFileIdRef = useRef(activeFileId);
+
   useEffect(() => {
-    // UPDATE 1: Duplicate ghost users ko join hone se rokne ke liye ek isMounted flag add kiya
+    filesRef.current = files;
+  }, [files]);
+
+  useEffect(() => {
+    activeFileIdRef.current = activeFileId;
+  }, [activeFileId]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
       const socket = await initSocket();
 
-      //  UPDATE 2: Agar network lag ki wajah se component unmount ho chuka hai, toh delay se aane wale socket ko cancel (disconnect) kar do taaki leak na ho
       if (!isMounted) {
         socket.disconnect();
         return;
@@ -156,9 +166,23 @@ const EditorPageContent = ({ roomId, locationState }) => {
           if (username !== locationState?.username) {
             toast.success(`${username} joined the room.`);
           }
+
+          // MASTER FIX 2: Naya user aane par sirf ek line nahi, POORA file system sync karo
+          const currentCode = codeRef.current || "";
+          const currentActiveId = activeFileIdRef.current;
+          const updatedWorkspace = filesRef.current.map((f) =>
+            f.id === currentActiveId ? { ...f, content: currentCode } : f,
+          );
+
+          // Local memory me bhi save rakho
+          setFiles(updatedWorkspace);
+
+          // Naye user ko poori files array aur current active file bhejo
           socketRef.current.emit(ACTIONS.SYNC_CODE, {
-            code: codeRef.current,
             socketId,
+            code: currentCode, // Backward compatibility for older connections
+            files: updatedWorkspace,
+            activeFileId: currentActiveId,
           });
         },
       );
@@ -176,9 +200,23 @@ const EditorPageContent = ({ roomId, locationState }) => {
         setFiles((prev) => prev.filter((f) => f.id !== fileId));
       });
 
-      socketRef.current.on("file_switch", ({ fileId }) =>
-        setActiveFileId(fileId),
-      );
+      //  MASTER FIX 3: Remote user jab file switch kare, toh apni current mehnat bhi save karo
+      socketRef.current.on("file_switch", ({ fileId }) => {
+        const currentCode = codeRef.current || "";
+        const oldActiveId = activeFileIdRef.current;
+
+        setFiles((prev) =>
+          prev.map((f) =>
+            f.id === oldActiveId ? { ...f, content: currentCode } : f,
+          ),
+        );
+
+        setActiveFileId(fileId);
+
+        // Incoming file ka content load karo taaki pichla text na dikhe
+        const incomingFile = filesRef.current.find((f) => f.id === fileId);
+        codeRef.current = incomingFile?.content || "";
+      });
 
       socketRef.current.on("panel_switch", ({ panel }) => {
         setActiveLeftPanel(panel);
@@ -188,7 +226,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
     init();
 
     return () => {
-      //  UPDATE 3: Component unmount hote hi flag false kar do taaki pending promises dead ho jayein
       isMounted = false;
       socketRef.current?.disconnect();
       socketRef.current?.off(ACTIONS.JOINED);
@@ -318,9 +355,9 @@ const EditorPageContent = ({ roomId, locationState }) => {
                 files={files}
                 activeFileId={activeFileId}
                 onFileSelect={(fileId) => {
-                  if (fileId === activeFileId) return; //  Agar wahi file khuli hai, toh kuch mat karo
+                  if (fileId === activeFileId) return;
 
-                  // 1. Current Editor ka code memory (files array) mein save karo
+                  //  MASTER FIX 4: Doosri file pe jane se pehle current editor ka code save karo aur reference update karo
                   const currentMemoryCode = codeRef.current || "";
                   setFiles((prev) =>
                     prev.map((f) =>
@@ -330,23 +367,40 @@ const EditorPageContent = ({ roomId, locationState }) => {
                     ),
                   );
 
-                  // 2. Active file change karo
-                  setActiveFileId(fileId);
+                  const incomingFile = files.find((f) => f.id === fileId);
+                  codeRef.current = incomingFile?.content || "";
 
-                  // 3. Socket ko batayo
+                  setActiveFileId(fileId);
                   socketRef.current.emit("file_switch", { roomId, fileId });
                 }}
                 onFileCreate={(name) => {
+                  // MASTER FIX 5: Nayi file banane par purana code save karo, phir nayi blank file me jao
+                  const currentMemoryCode = codeRef.current || "";
                   const newFile = {
                     id: Date.now().toString(),
                     name,
                     content: "",
                   };
-                  setFiles((prev) => [...prev, newFile]);
+
+                  setFiles((prev) => {
+                    const updated = prev.map((f) =>
+                      f.id === activeFileId
+                        ? { ...f, content: currentMemoryCode }
+                        : f,
+                    );
+                    return [...updated, newFile];
+                  });
+
+                  codeRef.current = ""; // Nayi file ekdum blank honi chahiye
                   setActiveFileId(newFile.id);
+
                   socketRef.current.emit("file_create", {
                     roomId,
                     file: newFile,
+                  });
+                  socketRef.current.emit("file_switch", {
+                    roomId,
+                    fileId: newFile.id,
                   });
                 }}
                 onFileDelete={(fileId) => {
@@ -364,13 +418,10 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   flex: 1,
                   backgroundColor: "#1e1e24",
                   position: "relative",
-                  minHeight: 0, // <--- YE ADD KARO
+                  minHeight: 0,
                 }}
               >
                 <RemoteScreenShareViewer>
-                  {/* NAYA FIX: Dono components rendered hain, CSS se toggle honge */}
-
-                  {/* 1. Editor Section */}
                   <div
                     className="editorArea"
                     style={{
@@ -396,7 +447,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
                     )}
                   </div>
 
-                  {/* 2. Whiteboard Section */}
                   <div
                     className="whiteboardArea"
                     style={{
@@ -406,7 +456,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                         activeLeftPanel === "whiteboard" ? "block" : "none",
                       height: "100%",
                       minHeight: 0,
-                      position: "relative", //  YE ADD KARO: Iske bina icons boundary se bahar leak honge
+                      position: "relative",
                     }}
                   >
                     <Whiteboard socketRef={socketRef} roomId={roomId} />
@@ -415,7 +465,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
               </div>
             </div>
 
-            {/*  OUTPUT COMPILER ARTIFACT MOUNT LAYER */}
             <div
               className="outputSectionWrapper"
               style={{
@@ -431,7 +480,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
             </div>
           </div>
 
-          {/* SIDE TABS AREA PANEL */}
           <div className="rightPanel">
             <div className="rightTabs">
               <button
@@ -477,7 +525,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
           </div>
         </div>
 
-        {/*  BOTTOM PANEL WITH SEALED PROVIDER CONTROLS */}
         <div
           className="bottomBar"
           style={{
