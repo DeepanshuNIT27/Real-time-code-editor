@@ -8,9 +8,15 @@ const CallControls = () => {
   const [isCamOff, setIsCamOff] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
 
+  //  UPDATE 1: Hardware crash aur overlapping API calls rokne ke liye processing state
+  const [isProcessing, setIsProcessing] = useState(false);
+
   if (!call) return null;
 
   const toggleMic = async () => {
+    //  UPDATE 2: Agar pichli request chal rahi hai, toh naye clicks ko ignore karo
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
       if (isMuted) {
         await call.microphone.enable();
@@ -20,10 +26,14 @@ const CallControls = () => {
       setIsMuted(!isMuted);
     } catch (err) {
       console.error("Mic toggle crash block handled:", err);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const toggleCam = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
       if (isCamOff) {
         await call.camera.enable();
@@ -33,10 +43,14 @@ const CallControls = () => {
       setIsCamOff(!isCamOff);
     } catch (err) {
       console.error("Camera toggle crash block handled:", err);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   const toggleScreenShare = async () => {
+    if (isProcessing) return;
+    setIsProcessing(true);
     try {
       if (isScreenSharing) {
         await call.screenShare.disable();
@@ -46,6 +60,8 @@ const CallControls = () => {
       setIsScreenSharing(!isScreenSharing);
     } catch (err) {
       console.error("Screen share toggle crash block handled:", err);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -55,10 +71,11 @@ const CallControls = () => {
     alignItems: "center",
     justifyContent: "center",
     border: "none",
-    cursor: "pointer",
+    cursor: isProcessing ? "wait" : "pointer", //  UPDATE 3: Loading cursor for better UX
     boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
     transition: "all 0.2s ease-in-out",
     color: "#fff",
+    opacity: isProcessing ? 0.7 : 1, // Feedback that action is processing
   };
 
   const wrapperStyle = {
@@ -97,6 +114,7 @@ const CallControls = () => {
             backgroundColor: isMuted ? "#ef4444" : "#334155", // Red when muted, Dark slate when active
           }}
           title={isMuted ? "Turn Mic On" : "Mute Mic"}
+          disabled={isProcessing}
         >
           {isMuted ? (
             <svg
@@ -146,6 +164,7 @@ const CallControls = () => {
             backgroundColor: isCamOff ? "#ef4444" : "#334155", // Red when off, Dark slate when on
           }}
           title={isCamOff ? "Turn Camera On" : "Turn Camera Off"}
+          disabled={isProcessing}
         >
           {isCamOff ? (
             <svg
@@ -180,7 +199,7 @@ const CallControls = () => {
         <span style={labelStyle}>Camera</span>
       </div>
 
-      {/* 💻 Screen Share Control (Rounded Square like Target UI) */}
+      {/*  Screen Share Control (Rounded Square like Target UI) */}
       <div style={wrapperStyle}>
         <button
           onClick={toggleScreenShare}
@@ -192,6 +211,7 @@ const CallControls = () => {
             backgroundColor: isScreenSharing ? "#22c55e" : "#3b82f6", // Green when sharing, Blue when idle
           }}
           title={isScreenSharing ? "Stop Screen Share" : "Share Screen"}
+          disabled={isProcessing}
         >
           <svg
             width="24"
