@@ -13,7 +13,7 @@ export const VideoCallProvider = ({ children, userId, userName, roomId }) => {
   const [initError, setInitError] = useState(false);
 
   useEffect(() => {
-    // 🎯 CHANGE 1: 'temp-id' validation lagayi taaki loading phase ke waqt empty stream register na ho
+    //  CHANGE 1: 'temp-id' validation lagayi taaki loading phase ke waqt empty stream register na ho
     if (!userId || userId === "temp-id" || !roomId) return;
 
     let isMounted = true;
@@ -22,9 +22,11 @@ export const VideoCallProvider = ({ children, userId, userName, roomId }) => {
 
     const initVideoCall = async () => {
       try {
-        // ✅ FIX: Dynamic URL use kiya hai jo Render pe apne aap adjust ho jayega
-        const BACKEND_URL =
-          import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+        //  UPDATE 1: Localhost fallback hataya. Agar URL missing hai toh app crash hone ki jagah gracefully fail hogi.
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+        if (!BACKEND_URL) {
+          throw new Error("System Error: VITE_BACKEND_URL is missing!");
+        }
 
         const response = await fetch(`${BACKEND_URL}/api/video/token`, {
           method: "POST",
@@ -35,7 +37,9 @@ export const VideoCallProvider = ({ children, userId, userName, roomId }) => {
         if (!response.ok) throw new Error("Server token failed");
         const data = await response.json();
 
-        if (!data.token) throw new Error("Token payload missing");
+        //  UPDATE 2: Token ke sath API key ka bhi strict check lagaya taaki SDK crash na ho
+        if (!data.token || !data.apiKey)
+          throw new Error("Token or API Key payload missing from backend");
 
         activeClient = new StreamVideoClient({
           apiKey: data.apiKey,
@@ -70,7 +74,7 @@ export const VideoCallProvider = ({ children, userId, userName, roomId }) => {
 
     initVideoCall();
 
-    // 🎯 CHANGE 2: Purane cleanup ko badal kar leak-proof absolute session termination lagaya hai
+    // CHANGE 2: Purane cleanup ko badal kar leak-proof absolute session termination lagaya hai
     return () => {
       isMounted = false;
 
