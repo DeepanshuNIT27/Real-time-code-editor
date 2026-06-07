@@ -53,8 +53,9 @@ const FilePanel = ({
   onFileCreate,
   onFileDelete,
 }) => {
-  const [newFileName, useState] = React.useState("");
-  const [showInput, setShowInput] = React.useState(false);
+  //  FIX: useState keyword ko hata kar wapas setNewFileName laga diya
+  const [newFileName, setNewFileName] = useState("");
+  const [showInput, setShowInput] = useState(false);
 
   const handleCreate = () => {
     const trimmedName = newFileName.trim();
@@ -67,7 +68,7 @@ const FilePanel = ({
 
     if (fileExists) {
       alert(`A file named "${trimmedName}" already exists!`);
-      return; // 🛑 Naya file mat banane do, yahin se rok do
+      return; //  Naya file mat banane do, yahin se rok do
     }
 
     onFileCreate(trimmedName);
@@ -86,7 +87,7 @@ const FilePanel = ({
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        // ⭐ UPDATE 1: selectZone typo ko theek kiya standard CSS ke liye
+        //  UPDATE 1: selectZone typo ko theek kiya standard CSS ke liye
         userSelect: "none",
       }}
     >
@@ -250,7 +251,7 @@ const FilePanel = ({
                   className="fileDeleteBtn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    // ⭐ UPDATE 2: Active file delete hone se roka taaki component crash na ho
+                    //  UPDATE 2: Active file delete hone se roka taaki component crash na ho
                     if (isActive) {
                       alert(
                         "You cannot delete the file you are currently viewing. Please switch to another file first.",
