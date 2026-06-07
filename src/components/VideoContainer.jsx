@@ -1,5 +1,5 @@
 import React from "react";
-// 🎯 FIX: SfuModels import kiya taaki Stream SDK ka exact track enum use kar sakein
+//  FIX: SfuModels import kiya taaki Stream SDK ka exact track enum use kar sakein
 import {
   useCall,
   useCallStateHooks,
@@ -51,7 +51,7 @@ const VideoContainerContent = () => {
         boxSizing: "border-box",
       }}
     >
-      {/* 🟢 LEFT SIDE: Horizontal Row for User Cam Cards & Screen Shares */}
+      {/*  LEFT SIDE: Horizontal Row for User Cam Cards & Screen Shares */}
       <div
         style={{
           display: "flex",
@@ -66,13 +66,13 @@ const VideoContainerContent = () => {
         className="styleScrollbar"
       >
         {participants.map((p) => {
-          // 🎯 EXACT FIX: SfuModels.TrackType.AUDIO use karke actual network publish track check kiya
+          //  EXACT FIX: SfuModels.TrackType.AUDIO use karke actual network publish track check kiya
           // Isse default cross rahega aur doosre tabs me perfectly 100% sync hoga.
           const isAudioMuted = !p.publishedTracks.includes(
             SfuModels.TrackType.AUDIO,
           );
 
-          // 🎯 NAYA FEATURE: Check karna ki banda abhi bol raha hai ya nahi
+          //  NAYA FEATURE: Check karna ki banda abhi bol raha hai ya nahi
           const isSpeaking = p.isSpeaking;
 
           return (
@@ -86,7 +86,7 @@ const VideoContainerContent = () => {
                   backgroundColor: "#2b2c40",
                   borderRadius: "6px",
                   overflow: "hidden",
-                  // 🎯 DYNAMIC BORDER: Bolne pe green glow aayega
+                  //  DYNAMIC BORDER: Bolne pe green glow aayega
                   border: isSpeaking
                     ? "2px solid #22c55e"
                     : "2px solid #3d3e59",
@@ -102,8 +102,12 @@ const VideoContainerContent = () => {
                     autoPlay
                     playsInline
                     muted={p.isLocalParticipant}
+                    // UPDATE: Bulletproof ref handler for Video streams to prevent memory leaks and crashes
                     ref={(el) => {
-                      if (el && p.videoStream) el.srcObject = p.videoStream;
+                      if (!el) return;
+                      if (el.srcObject !== p.videoStream) {
+                        el.srcObject = p.videoStream;
+                      }
                     }}
                     style={{
                       width: "100%",
@@ -130,7 +134,7 @@ const VideoContainerContent = () => {
                   </div>
                 )}
 
-                {/* 🎯 Mic Icon Badge */}
+                {/*  Mic Icon Badge */}
                 <div
                   style={{
                     position: "absolute",
@@ -163,7 +167,7 @@ const VideoContainerContent = () => {
                       <path d="M17 16.95A7 7 0 0 1 5 12H3a9 9 0 0 0 8.41 8.97v3.03h1v-3.03a8.99 8.99 0 0 0 2.82-.76"></path>
                     </svg>
                   ) : (
-                    // 🎯 DYNAMIC MIC: Bol raha hai toh green, warna white
+                    //  DYNAMIC MIC: Bol raha hai toh green, warna white
                     <svg
                       width="12"
                       height="12"
@@ -222,9 +226,12 @@ const VideoContainerContent = () => {
                     autoPlay
                     playsInline
                     muted={true}
+                    //  UPDATE: Same bulletproof ref handler yahan screen share ke liye
                     ref={(el) => {
-                      if (el && p.screenShareStream)
+                      if (!el) return;
+                      if (el.srcObject !== p.screenShareStream) {
                         el.srcObject = p.screenShareStream;
+                      }
                     }}
                     style={{
                       width: "100%",
@@ -256,7 +263,7 @@ const VideoContainerContent = () => {
         })}
       </div>
 
-      {/* 🔵 RIGHT SIDE: Media Control Operations Panel */}
+      {/*  RIGHT SIDE: Media Control Operations Panel */}
       <div style={{ flexShrink: 0, marginLeft: "20px" }}>
         <CallControls />
       </div>
