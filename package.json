@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "server:dev": "nodemon server.js",
-    "server:prod": "node server.js",
+    "server:dev": "nodemon server.cjs",
+    "server:prod": "node server.cjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
