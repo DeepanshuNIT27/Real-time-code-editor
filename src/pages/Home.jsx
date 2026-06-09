@@ -7,7 +7,10 @@ const Home = () => {
   const navigate = useNavigate();
 
   const [roomId, setRoomId] = useState("");
-  const [username, setUsername] = useState("");
+  // 🟢 NAYA: State initialize karte waqt hi localStorage se naam utha liya
+  const [username, setUsername] = useState(
+    localStorage.getItem("username") || "",
+  );
 
   const createNewRoom = (e) => {
     e.preventDefault();
@@ -17,7 +20,6 @@ const Home = () => {
   };
 
   const joinRoom = () => {
-    // UPDATE: Added .trim() to fix copy-paste invisible space bugs
     const safeRoomId = roomId.trim();
     const safeUsername = username.trim();
 
@@ -40,8 +42,38 @@ const Home = () => {
     }
   };
 
+  // 🟢 NAYA: Logout function banaya
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    toast.success("Logged out successfully");
+    navigate("/"); // Wapas login page par bhej diya
+  };
+
   return (
     <div className="homePageWrapper">
+      {/* 🟢 NAYA: Logout Button (Top-Right Corner) */}
+      <button
+        onClick={handleLogout}
+        style={{
+          position: "absolute",
+          top: "20px",
+          right: "20px",
+          padding: "10px 20px",
+          backgroundColor: "#ef4444", // Red button
+          color: "#fff",
+          border: "none",
+          borderRadius: "8px",
+          cursor: "pointer",
+          fontWeight: "bold",
+          fontSize: "14px",
+          boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+          transition: "background 0.3s",
+        }}
+      >
+        Logout
+      </button>
+
       <div className="formWrapper">
         <img
           className="homePageLogo"

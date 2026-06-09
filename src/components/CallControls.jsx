@@ -1,17 +1,49 @@
 import React, { useState } from "react";
-import { useCall } from "@stream-io/video-react-sdk";
+import toast from "react-hot-toast";
+import { useCall, useCallStateHooks } from "@stream-io/video-react-sdk";
 
 const CallControls = () => {
   const call = useCall();
 
   const [isMuted, setIsMuted] = useState(true);
   const [isCamOff, setIsCamOff] = useState(true);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
 
   //  UPDATE 1: Hardware crash aur overlapping API calls rokne ke liye processing state
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const { useHasOngoingScreenShare, useScreenShareState, useCallSettings } =
+    useCallStateHooks();
+  const isSomeoneScreenSharing = useHasOngoingScreenShare();
+  const callSettings = useCallSettings();
+  const { screenShare, optionsAwareIsMute, isTogglePending } =
+    useScreenShareState();
+
+  const amIScreenSharing = !optionsAwareIsMute;
+  const isScreenSharingAllowed = callSettings?.screensharing?.enabled !== false;
+  const disableScreenShareButton =
+    isProcessing ||
+    isTogglePending ||
+    !isScreenSharingAllowed ||
+    (!amIScreenSharing && isSomeoneScreenSharing);
+
   if (!call) return null;
+
+  const showDevicePermissionError = (deviceName, err) => {
+    const message = err?.message || "";
+    const isPermissionError =
+      message.includes("Permission") ||
+      err?.name === "NotAllowedError" ||
+      err?.name === "SecurityError";
+
+    if (isPermissionError) {
+      toast.error(
+        `${deviceName} permission blocked. Allow it from browser site settings, then reload.`,
+      );
+      return;
+    }
+
+    toast.error(`${deviceName} could not start. Check browser console.`);
+  };
 
   const toggleMic = async () => {
     //  UPDATE 2: Agar pichli request chal rahi hai, toh naye clicks ko ignore karo
@@ -26,6 +58,7 @@ const CallControls = () => {
       setIsMuted(!isMuted);
     } catch (err) {
       console.error("Mic toggle crash block handled:", err);
+      showDevicePermissionError("Microphone", err);
     } finally {
       setIsProcessing(false);
     }
@@ -43,23 +76,42 @@ const CallControls = () => {
       setIsCamOff(!isCamOff);
     } catch (err) {
       console.error("Camera toggle crash block handled:", err);
+      showDevicePermissionError("Camera", err);
     } finally {
       setIsProcessing(false);
     }
   };
 
   const toggleScreenShare = async () => {
-    if (isProcessing) return;
+    if (disableScreenShareButton) {
+      if (!isScreenSharingAllowed) {
+        toast.error("Screen sharing is disabled for this Stream call type.");
+      } else if (!amIScreenSharing && isSomeoneScreenSharing) {
+        toast.error("Someone is already sharing their screen.");
+      }
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      toast.error("Screen sharing is not supported in this browser/device.");
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      if (isScreenSharing) {
-        await call.screenShare.disable();
-      } else {
-        await call.screenShare.enable();
-      }
-      setIsScreenSharing(!isScreenSharing);
+      await screenShare.toggle();
     } catch (err) {
       console.error("Screen share toggle crash block handled:", err);
+      const message = err?.message || "";
+      if (
+        err?.name === "NotAllowedError" ||
+        message.includes("Permission") ||
+        message.includes("denied")
+      ) {
+        toast.error("Screen share permission was denied by the browser.");
+      } else {
+        toast.error("Screen share could not start. Check browser console.");
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -208,10 +260,10 @@ const CallControls = () => {
             width: "56px", // Thoda chouda (wider)
             height: "48px",
             borderRadius: "14px", // Rounded square
-            backgroundColor: isScreenSharing ? "#22c55e" : "#3b82f6", // Green when sharing, Blue when idle
+            backgroundColor: amIScreenSharing ? "#22c55e" : "#3b82f6", // Green when sharing, Blue when idle
           }}
-          title={isScreenSharing ? "Stop Screen Share" : "Share Screen"}
-          disabled={isProcessing}
+          title={amIScreenSharing ? "Stop Screen Share" : "Share Screen"}
+          disabled={disableScreenShareButton}
         >
           <svg
             width="24"
@@ -228,7 +280,9 @@ const CallControls = () => {
             <line x1="12" y1="17" x2="12" y2="21" />
           </svg>
         </button>
-        <span style={labelStyle}>Share Screen</span>
+        <span style={labelStyle}>
+          {amIScreenSharing ? "Stop Sharing" : "Share Screen"}
+        </span>
       </div>
     </div>
   );

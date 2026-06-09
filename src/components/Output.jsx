@@ -14,12 +14,6 @@ const Output = ({ getCode, languageId }) => {
       return;
     }
 
-    if (!input) {
-      setOutput("Please enter the input first!");
-      setIsError(true);
-      return;
-    }
-
     try {
       setIsLoading(true);
       setIsError(false);

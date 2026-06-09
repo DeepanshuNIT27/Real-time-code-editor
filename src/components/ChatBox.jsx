@@ -5,9 +5,29 @@ const ChatBox = ({ socketRef, roomId, username }) => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const storageKey = `chat-messages-${roomId}`;
 
   const chatMessagesRef = useRef(null);
   const pickerRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const savedMessages = localStorage.getItem(storageKey);
+      if (savedMessages) {
+        setMessages(JSON.parse(savedMessages));
+      }
+    } catch (err) {
+      console.error("Failed to restore chat messages:", err);
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(messages));
+    } catch (err) {
+      console.error("Failed to save chat messages:", err);
+    }
+  }, [messages, storageKey]);
 
   // 1. Listen for incoming messages
   useEffect(() => {
@@ -40,7 +60,7 @@ const ChatBox = ({ socketRef, roomId, username }) => {
         socketRef.current.off("receive_message");
       }
     };
-  }, []);
+  }, [socketRef]);
 
   // 2. Scroll to bottom automatically
   useEffect(() => {

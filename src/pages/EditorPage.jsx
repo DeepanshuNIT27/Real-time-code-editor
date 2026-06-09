@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 import toast from "react-hot-toast";
 
 import ACTIONS from "../Actions.js";
-import Client from "../components/Client.jsx";
 import Editor from "../components/Editor.jsx";
 import Output from "../components/Output.jsx";
 import ChatBox from "../components/ChatBox.jsx";
@@ -14,7 +13,11 @@ import { initSocket } from "../socket.js";
 // Safe wrapper injection layer imports
 import { VideoCallProvider } from "../context/VideoCallContext.jsx";
 import VideoContainer from "../components/VideoContainer.jsx";
-import { useCallStateHooks } from "@stream-io/video-react-sdk";
+import {
+  ParticipantView,
+  SfuModels,
+  useCallStateHooks,
+} from "@stream-io/video-react-sdk";
 
 import {
   useLocation,
@@ -38,9 +41,11 @@ const RemoteScreenShareViewer = ({ children }) => {
   const { useParticipants } = useCallStateHooks();
   const participants = useParticipants();
 
-  // Check karo agar koi aisa participant hai jo 'local' nahi hai aur uski screen share stream chal rahi hai
+  // Render as soon as the screen-share track is published so Stream can subscribe to it.
   const remoteSharer = participants.find(
-    (p) => !p.isLocalParticipant && p.screenShareStream,
+    (p) =>
+      !p.isLocalParticipant &&
+      p.publishedTracks.includes(SfuModels.TrackType.SCREEN_SHARE),
   );
 
   if (remoteSharer) {
@@ -74,14 +79,12 @@ const RemoteScreenShareViewer = ({ children }) => {
         >
           Viewing {remoteSharer.name || "Remote User"}'s Screen
         </div>
-        <video
-          autoPlay
-          playsInline
-          ref={(el) => {
-            if (el && remoteSharer.screenShareStream)
-              el.srcObject = remoteSharer.screenShareStream;
-          }}
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        <ParticipantView
+          participant={remoteSharer}
+          trackType="screenShareTrack"
+          muteAudio={true}
+          className="remoteScreenShareParticipant"
+          ParticipantViewUI={null}
         />
       </div>
     );
@@ -318,11 +321,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
           </div>
 
           <div className="topBarRight">
-            <div className="topAvatarRow">
-              {clients.map((client) => (
-                <Client key={client.socketId} username={client.username} />
-              ))}
-            </div>
             <button className="btn copyBtn" onClick={copyRoomId}>
               Copy Room ID
             </button>

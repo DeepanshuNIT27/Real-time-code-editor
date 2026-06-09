@@ -8,6 +8,11 @@ const ACTIONS = require("./src/Actions.cjs");
 const { StreamClient } = require("@stream-io/node-sdk");
 require("dotenv").config();
 
+// 🟢 NAYA: Database aur Auth ke liye imports
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+
 const server = http.createServer(app);
 
 // CORS fix for production
@@ -20,12 +25,26 @@ app.use(
 );
 app.use(express.json());
 
+// 🟢 NAYA: MongoDB Connection
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected Successfully"))
+  .catch((err) => console.error("❌ MongoDB Connection Error:", err));
+
+// 🟢 NAYA: User Schema (Database design)
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+});
+const User = mongoose.model("User", userSchema);
+
 const io = new Server(server, {
   cors: { origin: true, credentials: true, methods: ["GET", "POST"] },
 });
 app.use(express.static(path.join(__dirname, "dist")));
 
-// (Video token route)
+// (Video token route) - Jaisa tha waisa hi hai
 app.post("/api/video/token", async (req, res) => {
   try {
     const { userId } = req.body;
@@ -46,9 +65,76 @@ app.post("/api/video/token", async (req, res) => {
   }
 });
 
+// 🟢 NAYA: Signup API
+app.post("/api/auth/signup", async (req, res) => {
+  try {
+    const { username, email, password } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser)
+      return res.status(400).json({ error: "Email already in use" });
+
+    // Hash Password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Save to DB
+    const newUser = new User({ username, email, password: hashedPassword });
+    await newUser.save();
+
+    // Generate Token
+    const token = jwt.sign(
+      { id: newUser._id, username },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+    res
+      .status(201)
+      .json({ token, username, message: "User created successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error during signup" });
+  }
+});
+
+// 🟢 NAYA: Login API
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Check if user exists
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(400).json({ error: "Invalid email or password" });
+
+    // Verify Password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(400).json({ error: "Invalid email or password" });
+
+    // Generate Token
+    const token = jwt.sign(
+      { id: user._id, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+    res
+      .status(200)
+      .json({ token, username: user.username, message: "Login successful" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error during login" });
+  }
+});
+
+// ⚠️ IMPORTANT FIX: Frontend catch-all route ko yahan (sabse end mein) shift kiya
+// Taaki frontend router humare API routes ko block na kare.
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
+
+// --- 👇 YAHAN SE NEECHE SOCKETS KA CODE 100% UNTOUCHED HAI 👇 ---
 
 const userSocketMap = {};
 function getAllConnectedClients(roomId) {

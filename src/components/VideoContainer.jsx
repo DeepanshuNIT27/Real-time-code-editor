@@ -1,8 +1,9 @@
 import React from "react";
-//  FIX: SfuModels import kiya taaki Stream SDK ka exact track enum use kar sakein
 import {
   useCall,
   useCallStateHooks,
+  ParticipantView,
+  ParticipantsAudio,
   SfuModels,
 } from "@stream-io/video-react-sdk";
 import CallControls from "./CallControls";
@@ -51,6 +52,8 @@ const VideoContainerContent = () => {
         boxSizing: "border-box",
       }}
     >
+      <ParticipantsAudio participants={participants} />
+
       {/*  LEFT SIDE: Horizontal Row for User Cam Cards & Screen Shares */}
       <div
         style={{
@@ -74,6 +77,9 @@ const VideoContainerContent = () => {
 
           //  NAYA FEATURE: Check karna ki banda abhi bol raha hai ya nahi
           const isSpeaking = p.isSpeaking;
+          const isScreenSharing = p.publishedTracks.includes(
+            SfuModels.TrackType.SCREEN_SHARE,
+          );
 
           return (
             <React.Fragment key={p.sessionId}>
@@ -97,42 +103,30 @@ const VideoContainerContent = () => {
                   transition: "all 0.2s ease-in-out", // Smooth transition ke liye
                 }}
               >
-                {p.videoStream ? (
-                  <video
-                    autoPlay
-                    playsInline
-                    muted={p.isLocalParticipant}
-                    // UPDATE: Bulletproof ref handler for Video streams to prevent memory leaks and crashes
-                    ref={(el) => {
-                      if (!el) return;
-                      if (el.srcObject !== p.videoStream) {
-                        el.srcObject = p.videoStream;
-                      }
-                    }}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      transform: p.isLocalParticipant ? "scaleX(-1)" : "none",
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      width: "100%",
-                      height: "100%",
-                      color: "#fff",
-                      fontSize: "12px",
-                      fontWeight: "600",
-                      backgroundColor: "#3e3f4e",
-                    }}
-                  >
-                    {p.name?.charAt(0).toUpperCase() || "U"}
-                  </div>
-                )}
+                <ParticipantView
+                  participant={p}
+                  trackType="videoTrack"
+                  className="streamParticipantCard"
+                  muteAudio={true}
+                  ParticipantViewUI={null}
+                  VideoPlaceholder={() => (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "100%",
+                        height: "100%",
+                        color: "#fff",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        backgroundColor: "#3e3f4e",
+                      }}
+                    >
+                      {p.name?.charAt(0).toUpperCase() || "U"}
+                    </div>
+                  )}
+                />
 
                 {/*  Mic Icon Badge */}
                 <div
@@ -208,7 +202,7 @@ const VideoContainerContent = () => {
               </div>
 
               {/* 2. SCREEN SHARE CARD (Ab sirf tumhara local screen share bottom me dikhega) */}
-              {p.screenShareStream && p.isLocalParticipant && (
+              {isScreenSharing && p.isLocalParticipant && (
                 <div
                   style={{
                     position: "relative",
@@ -222,22 +216,12 @@ const VideoContainerContent = () => {
                     boxShadow: "0 0 8px rgba(59, 130, 246, 0.4)",
                   }}
                 >
-                  <video
-                    autoPlay
-                    playsInline
-                    muted={true}
-                    //  UPDATE: Same bulletproof ref handler yahan screen share ke liye
-                    ref={(el) => {
-                      if (!el) return;
-                      if (el.srcObject !== p.screenShareStream) {
-                        el.srcObject = p.screenShareStream;
-                      }
-                    }}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                    }}
+                  <ParticipantView
+                    participant={p}
+                    trackType="screenShareTrack"
+                    muteAudio={true}
+                    className="streamParticipantCard streamScreenShareCard"
+                    ParticipantViewUI={null}
                   />
 
                   {/* Screen Share Badge */}
