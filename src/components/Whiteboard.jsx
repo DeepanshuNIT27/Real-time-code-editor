@@ -52,7 +52,7 @@ const Whiteboard = ({ socketRef, roomId }) => {
 
       latestElementsRef.current = elements;
 
-      //  UPDATE: Yahan se clearTimeout hataya, real Throttle lagaya,
+      // UPDATE: Yahan se clearTimeout hataya, real Throttle lagaya,
       // aur latestElementsRef.current ko emit kiya taaki continuous line bane.
       if (!throttleTimeoutRef.current) {
         throttleTimeoutRef.current = setTimeout(() => {
@@ -64,18 +64,11 @@ const Whiteboard = ({ socketRef, roomId }) => {
   };
 
   return (
-    <div
-      style={{
-        height: "100%",
-        width: "100%",
-        position: "relative",
-        overflow: "hidden", // Ye icons ko bahar jane se rokega
-      }}
-    >
+    <div className="whiteboardContainer">
       <Excalidraw
         excalidrawAPI={(api) => setExcalidrawAPI(api)}
         onChange={handleChange}
-        theme="light"
+        theme="light" /* Wapas white canvas ke liye set kar diya */
       />
     </div>
   );

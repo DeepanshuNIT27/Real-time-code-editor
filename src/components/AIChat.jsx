@@ -27,7 +27,6 @@ const AIChat = ({ getCode, selectedLanguage }) => {
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setIsLoading(true);
 
-    // UPDATE 1: Deployment par API key missing hone par gracefully handle karna
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
       setMessages((prev) => [
@@ -58,7 +57,6 @@ User question: ${userMessage}
 Give a helpful, concise response. If asked for hints only give hints, if asked for solution give solution.`;
 
       const response = await fetch(
-        //  UPDATE 2: Hardcoded variable ki jagah safely apiKey use kiya
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         {
           method: "POST",
@@ -69,7 +67,6 @@ Give a helpful, concise response. If asked for hints only give hints, if asked f
         },
       );
 
-      //  UPDATE 3: Agar API limit cross ho jaye ya model error de, toh usko catch block me bhejna
       if (!response.ok) {
         throw new Error(`API returned status: ${response.status}`);
       }
@@ -108,50 +105,78 @@ Give a helpful, concise response. If asked for hints only give hints, if asked f
   };
 
   return (
-    <div className="aiChat">
+    <div className="aiChatContainer">
       {/* messages list */}
       <div className="aiMessages">
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={`aiMessage ${msg.role === "user" ? "aiUserMessage" : "aiAssistantMessage"}`}
-          >
-            <span className="aiMessageRole">
-              {msg.role === "user" ? "You" : "AI"}
-            </span>
-            <p className="aiMessageText">{msg.content}</p>
+        {messages.length === 0 ? (
+          <div className="emptyChatState">
+            No messages yet.
+            <br />
+            Start the conversation!
           </div>
-        ))}
+        ) : (
+          messages.map((msg, index) => (
+            <div
+              key={index}
+              className={`aiMessageWrapper ${
+                msg.role === "user" ? "userWrapper" : "aiWrapper"
+              }`}
+            >
+              <div
+                className={`aiMessage ${
+                  msg.role === "user" ? "aiUserMessage" : "aiAssistantMessage"
+                }`}
+              >
+                <p className="aiMessageText">{msg.content}</p>
+              </div>
+            </div>
+          ))
+        )}
 
         {/* loading indicator */}
         {isLoading && (
-          <div className="aiMessage aiAssistantMessage">
-            <span className="aiMessageRole">AI</span>
-            <p className="aiMessageText">Thinking...</p>
+          <div className="aiMessageWrapper aiWrapper">
+            <div className="aiMessage aiAssistantMessage">
+              <p className="aiMessageText">Thinking...</p>
+            </div>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* input area */}
-      <div className="aiInputRow">
-        <input
-          className="aiInput"
-          type="text"
-          placeholder="Ask AI about your code..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          disabled={isLoading}
-        />
-        <button
-          className="aiSendBtn"
-          onClick={sendMessage}
-          disabled={isLoading}
-        >
-          Ask
-        </button>
+      {/* input area - Updated to match Target UI */}
+      <div className="aiInputSection">
+        <div className="aiInputRow">
+          <span className="emojiIcon">😀</span>
+          <input
+            className="aiInput"
+            type="text"
+            placeholder="Type a message..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyPress}
+            disabled={isLoading}
+          />
+          <button
+            className="aiSendBtn"
+            onClick={sendMessage}
+            disabled={isLoading || !message.trim()}
+          >
+            {/* SVG icon for Send (Paper plane) matching target UI */}
+            <svg
+              stroke="currentColor"
+              fill="currentColor"
+              strokeWidth="0"
+              viewBox="0 0 24 24"
+              height="18px"
+              width="18px"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );

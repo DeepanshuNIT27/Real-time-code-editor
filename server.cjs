@@ -8,7 +8,7 @@ const ACTIONS = require("./src/Actions.cjs");
 const { StreamClient } = require("@stream-io/node-sdk");
 require("dotenv").config();
 
-// 🟢 NAYA: Database aur Auth ke liye imports
+// 🟢 Database aur Auth ke liye imports
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -25,17 +25,25 @@ app.use(
 );
 app.use(express.json());
 
-// 🟢 NAYA: MongoDB Connection
+// 🟢 MongoDB Connection
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
-// 🟢 NAYA: User Schema (Database design)
+// 🟢 User Schema Updated with Room History
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  rooms: [
+    {
+      roomId: String,
+      name: String,
+      color: String,
+      lastAccessed: { type: Date, default: Date.now },
+    },
+  ],
 });
 const User = mongoose.model("User", userSchema);
 
@@ -44,7 +52,7 @@ const io = new Server(server, {
 });
 app.use(express.static(path.join(__dirname, "dist")));
 
-// (Video token route) - Jaisa tha waisa hi hai
+// (Video token route)
 app.post("/api/video/token", async (req, res) => {
   try {
     const { userId } = req.body;
@@ -65,25 +73,20 @@ app.post("/api/video/token", async (req, res) => {
   }
 });
 
-// 🟢 NAYA: Signup API
+// 🟢 Signup API
 app.post("/api/auth/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
-
-    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser)
       return res.status(400).json({ error: "Email already in use" });
 
-    // Hash Password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Save to DB
     const newUser = new User({ username, email, password: hashedPassword });
     await newUser.save();
 
-    // Generate Token
     const token = jwt.sign(
       { id: newUser._id, username },
       process.env.JWT_SECRET,
@@ -98,22 +101,18 @@ app.post("/api/auth/signup", async (req, res) => {
   }
 });
 
-// 🟢 NAYA: Login API
+// 🟢 Login API
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    // Check if user exists
     const user = await User.findOne({ email });
     if (!user)
       return res.status(400).json({ error: "Invalid email or password" });
 
-    // Verify Password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
       return res.status(400).json({ error: "Invalid email or password" });
 
-    // Generate Token
     const token = jwt.sign(
       { id: user._id, username: user.username },
       process.env.JWT_SECRET,
@@ -128,14 +127,85 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// ⚠️ IMPORTANT FIX: Frontend catch-all route ko yahan (sabse end mein) shift kiya
-// Taaki frontend router humare API routes ko block na kare.
+// 🟢 Token Verification Middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Access denied" });
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: "Invalid token" });
+    req.user = user;
+    next();
+  });
+};
+
+// 🟢 Save/Update Room in History
+app.post("/api/rooms/save", authenticateToken, async (req, res) => {
+  try {
+    const { roomId, name, color } = req.body;
+    const userId = req.user.id;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const existingRoomIndex = user.rooms.findIndex((r) => r.roomId === roomId);
+    if (existingRoomIndex !== -1) {
+      user.rooms[existingRoomIndex].lastAccessed = Date.now();
+    } else {
+      user.rooms.push({ roomId, name, color: color || "#3b82f6" });
+    }
+
+    await user.save();
+    res.status(200).json({ message: "Room saved", rooms: user.rooms });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// 🟢 Fetch Room History
+app.get("/api/rooms/history", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const sortedRooms = user.rooms.sort(
+      (a, b) => b.lastAccessed - a.lastAccessed,
+    );
+    res.status(200).json({ rooms: sortedRooms });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// 🟢 Delete Room from History API
+app.delete("/api/rooms/:roomId", authenticateToken, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const userId = req.user.id;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    user.rooms = user.rooms.filter((r) => r.roomId !== roomId);
+    await user.save();
+
+    res.status(200).json({ message: "Room deleted", rooms: user.rooms });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error during deletion" });
+  }
+});
+
+// ⚠️ Catch-all route
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 
-// --- 👇 YAHAN SE NEECHE SOCKETS KA CODE 100% UNTOUCHED HAI 👇 ---
-
+// --- 👇 SOCKETS CODE 👇 ---
 const userSocketMap = {};
 function getAllConnectedClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
@@ -164,7 +234,6 @@ io.on("connection", (socket) => {
     socket.in(roomId).emit(ACTIONS.CODE_CHANGE, { fileId, code });
   });
 
-  // 🎯 SURGICAL FIX: File System Synchronization Events Added Here
   socket.on("file_create", ({ roomId, file }) => {
     socket.in(roomId).emit("file_create", { file });
   });
@@ -181,7 +250,6 @@ io.on("connection", (socket) => {
     socket.in(roomId).emit("panel_switch", { panel });
   });
 
-  // Sync initial code for late joiners
   socket.on(ACTIONS.SYNC_CODE, ({ socketId, code }) => {
     io.to(socketId).emit(ACTIONS.CODE_CHANGE, { code });
   });

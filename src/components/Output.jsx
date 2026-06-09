@@ -19,7 +19,7 @@ const Output = ({ getCode, languageId }) => {
       setIsError(false);
       setOutput("");
 
-      //  UPDATE 1: Deployment par ENV variable missing hone par crash se bachane ke liye strict check
+      // UPDATE 1: Deployment par ENV variable missing hone par crash se bachane ke liye strict check
       const judgeUrl = import.meta.env.VITE_JUDGE0_URL;
       if (!judgeUrl) {
         setOutput(
@@ -69,7 +69,7 @@ const Output = ({ getCode, languageId }) => {
       }
     } catch (err) {
       console.error("Run code error:", err);
-      //  UPDATE 3: Catch block ko thoda descriptive banaya taaki live bug easily samajh aaye
+      // UPDATE 3: Catch block ko thoda descriptive banaya taaki live bug easily samajh aaye
       setOutput(`Execution Failed: ${err.message}. Check browser console.`);
       setIsError(true);
     } finally {
@@ -84,51 +84,32 @@ const Output = ({ getCode, languageId }) => {
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        width: "100%",
-        backgroundColor: "#14141b",
-        color: "#fff",
-      }}
-    >
-      {/*  MAIN 50-50 SPLIT AREA */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+    <div className="outputContainer">
+      {/* MAIN 50-50 SPLIT AREA */}
+      <div className="outputSplitArea">
         {/* LEFT: Input Column */}
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            borderRight: "1px solid #3d3e59",
-            padding: "12px",
-          }}
-        >
-          <div
-            style={{
-              fontWeight: "bold",
-              fontSize: "12px",
-              color: "#fff",
-              marginBottom: "8px",
-              textTransform: "uppercase",
-              letterSpacing: "0.5px",
-            }}
-          >
-            Input
+        <div className="ioColumn borderRight">
+          <div className="ioHeader">
+            <span className="ioTitle">
+              <span className="ioIcon">⧉</span> INPUT
+            </span>
+            <button className="ioActionBtn iconBtn" title="Expand">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+              </svg>
+            </button>
           </div>
           <textarea
-            style={{
-              flex: 1,
-              backgroundColor: "transparent",
-              border: "none",
-              color: "#d1d5db",
-              outline: "none",
-              resize: "none",
-              fontFamily: "monospace",
-              fontSize: "14px",
-            }}
+            className="ioTextarea"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Enter input here..."
@@ -136,71 +117,21 @@ const Output = ({ getCode, languageId }) => {
         </div>
 
         {/* RIGHT: Output Column */}
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            padding: "12px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "8px",
-            }}
-          >
-            <div
-              style={{
-                fontWeight: "bold",
-                fontSize: "12px",
-                color: "#fff",
-                textTransform: "uppercase",
-                letterSpacing: "0.5px",
-              }}
-            >
-              Output
-            </div>
-
-            {/* 🎯 CLEAR BUTTON */}
-            <button
-              onClick={clearOutput}
-              style={{
-                backgroundColor: "#2b2c40",
-                color: "#d1d5db",
-                border: "1px solid #3d3e59",
-                padding: "4px 12px",
-                borderRadius: "6px",
-                fontSize: "12px",
-                cursor: "pointer",
-                transition: "all 0.2s",
-              }}
-              onMouseOver={(e) => (e.target.style.backgroundColor = "#3d3e59")}
-              onMouseOut={(e) => (e.target.style.backgroundColor = "#2b2c40")}
-            >
+        <div className="ioColumn">
+          <div className="ioHeader">
+            <span className="ioTitle">
+              <span className="ioIcon">⎋</span> OUTPUT
+            </span>
+            <button className="ioActionBtn textBtn" onClick={clearOutput}>
               Clear
             </button>
           </div>
 
-          <div
-            style={{
-              flex: 1,
-              overflow: "auto",
-              fontFamily: "monospace",
-              fontSize: "14px",
-              // FIXED: Output color ab white (#fff) aayega, aur error par red.
-              color: isError ? "#ef4444" : "#fff",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {isLoading && (
-              <span style={{ color: "#9ca3af" }}>Running code...</span>
-            )}
+          <div className={`ioContent ${isError ? "textError" : "textNormal"}`}>
+            {isLoading && <span className="textLoading">Running code...</span>}
             {!isLoading && output}
             {!isLoading && !output && (
-              <span style={{ color: "#4b5563" }}>
+              <span className="textPlaceholder">
                 Output will appear here...
               </span>
             )}
@@ -208,33 +139,9 @@ const Output = ({ getCode, languageId }) => {
         </div>
       </div>
 
-      {/*  BOTTOM: Run Button Row */}
-      <div
-        style={{
-          padding: "8px 16px",
-          borderTop: "1px solid #3d3e59",
-          backgroundColor: "#1e1e24",
-          display: "flex",
-          justifyContent: "flex-start",
-        }}
-      >
-        <button
-          onClick={runCode}
-          disabled={isLoading}
-          style={{
-            backgroundColor: "#22c55e",
-            color: "#000",
-            fontWeight: "bold",
-            border: "none",
-            padding: "8px 20px",
-            borderRadius: "6px",
-            cursor: isLoading ? "not-allowed" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            fontSize: "14px",
-          }}
-        >
+      {/* BOTTOM: Run Button Row */}
+      <div className="outputFooterRow">
+        <button className="runCodeBtn" onClick={runCode} disabled={isLoading}>
           {isLoading ? (
             "⏳ Running..."
           ) : (
@@ -250,6 +157,24 @@ const Output = ({ getCode, languageId }) => {
               Run Code
             </>
           )}
+        </button>
+        {/* Save button placeholder matching target UI */}
+        <button className="saveCodeBtn">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+          </svg>
+          Save
         </button>
       </div>
     </div>

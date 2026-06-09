@@ -13,7 +13,7 @@ export const VideoCallProvider = ({ children, userId, userName, roomId }) => {
   const [initError, setInitError] = useState(false);
 
   useEffect(() => {
-    //  CHANGE 1: 'temp-id' validation lagayi taaki loading phase ke waqt empty stream register na ho
+    // CHANGE 1: 'temp-id' validation lagayi taaki loading phase ke waqt empty stream register na ho
     if (!userId || userId === "temp-id" || !roomId) return;
 
     let isMounted = true;
@@ -22,7 +22,7 @@ export const VideoCallProvider = ({ children, userId, userName, roomId }) => {
 
     const initVideoCall = async () => {
       try {
-        //  UPDATE 1: Localhost fallback hataya. Agar URL missing hai toh app crash hone ki jagah gracefully fail hogi.
+        // UPDATE 1: Localhost fallback hataya. Agar URL missing hai toh app crash hone ki jagah gracefully fail hogi.
         const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
         if (!BACKEND_URL) {
           throw new Error("System Error: VITE_BACKEND_URL is missing!");
@@ -37,7 +37,7 @@ export const VideoCallProvider = ({ children, userId, userName, roomId }) => {
         if (!response.ok) throw new Error("Server token failed");
         const data = await response.json();
 
-        //  UPDATE 2: Token ke sath API key ka bhi strict check lagaya taaki SDK crash na ho
+        // UPDATE 2: Token ke sath API key ka bhi strict check lagaya taaki SDK crash na ho
         if (!data.token || !data.apiKey)
           throw new Error("Token or API Key payload missing from backend");
 
@@ -100,27 +100,15 @@ export const VideoCallProvider = ({ children, userId, userName, roomId }) => {
 
   if (initError) {
     return (
-      <div style={{ color: "#ef4444", fontSize: "12px", padding: "10px" }}>
-        ⚠️ Video Call temporary unavailable
+      <div className="streamErrorState">
+        ⚠️ Video Call temporarily unavailable
       </div>
     );
   }
 
   if (!client || !call) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: "100%",
-          height: "100%",
-          color: "#9ca3af",
-          fontSize: "13px",
-          fontFamily: "monospace",
-          backgroundColor: "#14141b",
-        }}
-      >
+      <div className="streamLoadingState">
         ⚡ Syncing secure audio-video streams...
       </div>
     );

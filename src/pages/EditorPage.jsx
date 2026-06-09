@@ -50,33 +50,9 @@ const RemoteScreenShareViewer = ({ children }) => {
 
   if (remoteSharer) {
     return (
-      <div
-        style={{
-          flex: 1,
-          width: "100%",
-          height: "100%",
-          backgroundColor: "#000",
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
+      <div className="remoteScreenShareOverlay">
         {/* Name Badge on top of screen share */}
-        <div
-          style={{
-            position: "absolute",
-            top: 12,
-            left: 16,
-            zIndex: 50,
-            backgroundColor: "#3b82f6",
-            padding: "6px 12px",
-            borderRadius: "6px",
-            color: "white",
-            fontSize: "13px",
-            fontWeight: "bold",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
-          }}
-        >
+        <div className="remoteShareBadge">
           Viewing {remoteSharer.name || "Remote User"}'s Screen
         </div>
         <ParticipantView
@@ -120,7 +96,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
   ]);
   const [activeFileId, setActiveFileId] = useState("1");
 
-  //  MASTER FIX 1: Socket ke andar fresh state access karne ke liye refs lagaye (Stale Closure fix)
+  // MASTER FIX 1: Socket ke andar fresh state access karne ke liye refs lagaye (Stale Closure fix)
   const filesRef = useRef(files);
   const activeFileIdRef = useRef(activeFileId);
 
@@ -203,7 +179,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
         setFiles((prev) => prev.filter((f) => f.id !== fileId));
       });
 
-      //  MASTER FIX 3: Remote user jab file switch kare, toh apni current mehnat bhi save karo
+      // MASTER FIX 3: Remote user jab file switch kare, toh apni current mehnat bhi save karo
       socketRef.current.on("file_switch", ({ fileId }) => {
         const currentCode = codeRef.current || "";
         const oldActiveId = activeFileIdRef.current;
@@ -270,19 +246,11 @@ const EditorPageContent = ({ roomId, locationState }) => {
       userName={locationState?.username}
       roomId={roomId}
     >
-      <div
-        className="appShell"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100vh",
-          overflow: "hidden",
-        }}
-      >
-        {/*  TOP BAR */}
-        <header className="topBar" style={{ flexShrink: 0 }}>
+      <div className="appShell">
+        {/* TOP BAR */}
+        <header className="topBar">
           <div className="topBarLeft">
-            <img className="topLogo" src="/code-sync.png" alt="logo" />
+            <img className="topLogo" src="/code-sync.png" alt="CodeSync Logo" />
             <div className="roomInfo">
               <span className="roomName">
                 Room: {locationState?.username}'s Room
@@ -331,31 +299,16 @@ const EditorPageContent = ({ roomId, locationState }) => {
         </header>
 
         {/* CENTER WORKSPACE SYSTEM AREA */}
-        <div
-          className="mainContent"
-          style={{ flex: 1, overflow: "hidden", display: "flex" }}
-        >
-          <div
-            className="leftPanelContainer"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              flex: 1,
-              height: "100%",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              className="upperWorkspace"
-              style={{ display: "flex", flex: 1, overflow: "hidden" }}
-            >
+        <div className="mainContent">
+          <div className="leftPanelContainer">
+            <div className="upperWorkspace">
               <FilePanel
                 files={files}
                 activeFileId={activeFileId}
                 onFileSelect={(fileId) => {
                   if (fileId === activeFileId) return;
 
-                  //  MASTER FIX 4: Doosri file pe jane se pehle current editor ka code save karo aur reference update karo
+                  // MASTER FIX 4: Doosri file pe jane se pehle current editor ka code save karo
                   const currentMemoryCode = codeRef.current || "";
                   setFiles((prev) =>
                     prev.map((f) =>
@@ -372,7 +325,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   socketRef.current.emit("file_switch", { roomId, fileId });
                 }}
                 onFileCreate={(name) => {
-                  // MASTER FIX 5: Nayi file banane par purana code save karo, phir nayi blank file me jao
+                  // MASTER FIX 5: Nayi file banane par purana code save karo
                   const currentMemoryCode = codeRef.current || "";
                   const newFile = {
                     id: Date.now().toString(),
@@ -389,7 +342,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                     return [...updated, newFile];
                   });
 
-                  codeRef.current = ""; // Nayi file ekdum blank honi chahiye
+                  codeRef.current = ""; // Nayi file ekdum blank
                   setActiveFileId(newFile.id);
 
                   socketRef.current.emit("file_create", {
@@ -408,25 +361,12 @@ const EditorPageContent = ({ roomId, locationState }) => {
                 }}
               />
 
-              <div
-                className="editorWorkspace"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  flex: 1,
-                  backgroundColor: "#1e1e24",
-                  position: "relative",
-                  minHeight: 0,
-                }}
-              >
+              <div className="editorWorkspace">
                 <RemoteScreenShareViewer>
                   <div
                     className="editorArea"
                     style={{
-                      flex: 1,
-                      overflow: "auto",
                       display: activeLeftPanel === "editor" ? "block" : "none",
-                      height: "100%",
                     }}
                   >
                     {socketRef.current && (
@@ -448,13 +388,8 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   <div
                     className="whiteboardArea"
                     style={{
-                      flex: 1,
-                      overflow: "hidden",
                       display:
                         activeLeftPanel === "whiteboard" ? "block" : "none",
-                      height: "100%",
-                      minHeight: 0,
-                      position: "relative",
                     }}
                   >
                     <Whiteboard socketRef={socketRef} roomId={roomId} />
@@ -463,14 +398,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
               </div>
             </div>
 
-            <div
-              className="outputSectionWrapper"
-              style={{
-                height: "180px",
-                borderTop: "1px solid #2d2d34",
-                flexShrink: 0,
-              }}
-            >
+            <div className="outputSectionWrapper">
               <Output
                 getCode={() => codeRef.current}
                 languageId={getCurrentLanguageId}
@@ -494,10 +422,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
               </button>
             </div>
 
-            <div
-              className="rightTabContent"
-              style={{ flex: 1, overflow: "hidden" }}
-            >
+            <div className="rightTabContent">
               <div
                 style={{
                   display: activeRightTab === "chat" ? "block" : "none",
@@ -510,7 +435,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   username={locationState?.username}
                 />
               </div>
-
               <div
                 style={{
                   display: activeRightTab === "ai" ? "block" : "none",
@@ -523,20 +447,11 @@ const EditorPageContent = ({ roomId, locationState }) => {
           </div>
         </div>
 
-        <div
-          className="bottomBar"
-          style={{
-            height: "110px",
-            padding: "0",
-            flexShrink: 0,
-            overflow: "hidden",
-            backgroundColor: "#14141b",
-          }}
-        >
+        <div className="bottomBar">
           {currentSocketId ? (
             <VideoContainer />
           ) : (
-            <div className="flex items-center justify-center w-full h-full text-gray-400 text-sm">
+            <div className="bottomLoader">
               Connecting and verifying hardware sync signals...
             </div>
           )}

@@ -31,7 +31,7 @@ const ChatBox = ({ socketRef, roomId, username }) => {
 
   // 1. Listen for incoming messages
   useEffect(() => {
-    let interval; // UPDATE 1: Interval ko bahar declare kiya taaki attach hone par usko rok sakein
+    let interval;
 
     const attachListener = () => {
       if (
@@ -46,7 +46,6 @@ const ChatBox = ({ socketRef, roomId, username }) => {
           setMessages((prev) => [...prev, { ...data, time: currentTime }]);
         });
 
-        //  UPDATE 2: Listener attach hote hi background interval ko rok do (Memory Leak aur Duplicate messages fixed!)
         clearInterval(interval);
       }
     };
@@ -123,137 +122,45 @@ const ChatBox = ({ socketRef, roomId, username }) => {
   };
 
   return (
-    <div
-      className="chatBox"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        backgroundColor: "#14141b",
-      }}
-    >
-      {/*  MESSAGES LIST */}
-      <div
-        ref={chatMessagesRef}
-        className="chatMessages"
-        style={{
-          padding: "16px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "16px",
-          overflowY: "auto",
-          flex: 1,
-        }}
-      >
+    <div className="chatBoxContainer">
+      {/* 💬 MESSAGES LIST */}
+      <div ref={chatMessagesRef} className="chatMessagesList">
         {messages.length === 0 && (
-          <p
-            style={{
-              color: "#64748b",
-              fontSize: "13px",
-              textAlign: "center",
-              marginTop: "20px",
-            }}
-          >
-            No messages yet. Start the conversation!
-          </p>
+          <div className="emptyChatState">
+            No messages yet.
+            <br />
+            Start the conversation!
+          </div>
         )}
 
         {messages.map((msg, index) => (
-          <div
-            key={index}
-            style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}
-          >
+          <div key={index} className="chatMessageRow">
             {/* Avatar */}
             <div
-              style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "50%",
-                backgroundColor: getAvatarColor(msg.username),
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#fff",
-                fontSize: "16px",
-                fontWeight: "bold",
-                flexShrink: 0,
-              }}
+              className="chatAvatar"
+              style={{ backgroundColor: getAvatarColor(msg.username) }}
             >
               {msg.username.charAt(0).toUpperCase()}
             </div>
 
             {/* Message Details */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                paddingTop: "2px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: "8px",
-                  marginBottom: "4px",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    color: "#e2e8f0",
-                  }}
-                >
+            <div className="chatContent">
+              <div className="chatHeader">
+                <span className="chatUsername">
                   {msg.username === username ? "You" : msg.username}
                 </span>
-                {msg.time && (
-                  <span style={{ fontSize: "11px", color: "#64748b" }}>
-                    {msg.time}
-                  </span>
-                )}
+                {msg.time && <span className="chatTime">{msg.time}</span>}
               </div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: "14px",
-                  color: "#cbd5e1",
-                  lineHeight: "1.5",
-                  wordBreak: "break-word",
-                }}
-              >
-                {msg.message}
-              </p>
+              <p className="chatText">{msg.message}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* 🔵 UPGRADED INPUT AREA (Target Image Style) */}
-      <div
-        style={{
-          display: "flex",
-          gap: "8px",
-          padding: "12px",
-          backgroundColor: "#1c1c27",
-          borderTop: "1px solid #2d2d34",
-          position: "relative",
-          width: "100%",
-          boxSizing: "border-box",
-          alignItems: "center",
-        }}
-      >
+      {/* 🔵 UPGRADED INPUT AREA (Target UI Style) */}
+      <div className="chatInputSection">
         {showEmojiPicker && (
-          <div
-            ref={pickerRef}
-            style={{
-              position: "absolute",
-              bottom: "70px",
-              left: "16px",
-              zIndex: 1000,
-              boxShadow: "0 5px 20px rgba(0,0,0,0.4)",
-            }}
-          >
+          <div ref={pickerRef} className="emojiPickerContainer">
             <EmojiPicker
               onEmojiClick={onEmojiClick}
               theme="dark"
@@ -263,77 +170,45 @@ const ChatBox = ({ socketRef, roomId, username }) => {
           </div>
         )}
 
-        {/* Emoji Button */}
-        <button
-          onClick={() => setShowEmojiPicker((prev) => !prev)}
-          style={{
-            padding: "8px",
-            borderRadius: "50%",
-            border: "none",
-            backgroundColor: "transparent",
-            color: "#888",
-            cursor: "pointer",
-            fontSize: "20px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "0.2s",
-            flexShrink: 0,
-          }}
-          title="Add Emoji"
-        >
-          😀
-        </button>
-
-        {/* Pill-shaped Input Field */}
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            padding: "10px 14px",
-            borderRadius: "20px",
-            border: "1px solid #3d3e59",
-            backgroundColor: "#2a2b3d",
-            color: "#fff",
-            fontSize: "14px",
-            outline: "none",
-          }}
-        />
-
-        {/* SVG Arrow Send Button */}
-        <button
-          onClick={sendMessage}
-          style={{
-            padding: "8px",
-            borderRadius: "50%",
-            border: "none",
-            backgroundColor: message.trim() ? "#4aed88" : "#2a2b3d",
-            color: message.trim() ? "#000" : "#888",
-            cursor: message.trim() ? "pointer" : "default",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "38px",
-            height: "38px",
-            transition: "0.3s ease",
-            flexShrink: 0,
-          }}
-          disabled={!message.trim()}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            style={{ width: "18px", height: "18px", marginLeft: "2px" }}
+        <div className="chatInputRow">
+          {/* Emoji Button */}
+          <span
+            className="emojiIcon"
+            onClick={() => setShowEmojiPicker((prev) => !prev)}
+            title="Add Emoji"
           >
-            <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
-          </svg>
-        </button>
+            😀
+          </span>
+
+          {/* Pill-shaped Input Field */}
+          <input
+            className="chatInput"
+            type="text"
+            placeholder="Type a message..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyPress}
+          />
+
+          {/* SVG Arrow Send Button */}
+          <button
+            className="chatSendBtn"
+            onClick={sendMessage}
+            disabled={!message.trim()}
+          >
+            <svg
+              stroke="currentColor"
+              fill="currentColor"
+              strokeWidth="0"
+              viewBox="0 0 24 24"
+              height="18px"
+              width="18px"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
