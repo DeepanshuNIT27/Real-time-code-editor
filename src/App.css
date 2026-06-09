@@ -185,104 +185,9 @@
 
 
 
-.homePageWrapper {
-   height: 100vh;
-   display: flex;
-   align-items: center;
-   justify-content: center;
-   color: #ffffff;
-}
-
-/* .homePageWrapper {
-  height: 100vh;
-  display: flex;
-  align-items: flex-start; /* change this */
-  /* justify-content: center;
-  color: #ffffff;
-  padding-top: 20px; /* optional spacing } */
-
-
-.formWrapper {
-  background-color: #282a36;
-  padding: 20px;
-  border-radius: 10px;
-  width: 400px;
-  max-width: 90%;
-}
-
-footer {
-  position: fixed;
-  bottom: 0;
-}
-
-footer a {
-  color: #4aee88;
-}
-
-.inputGroup {
-  display: flex;
-  flex-direction: column;
-}
-
-.mainLabel {
-  margin-bottom: 20px;
-  margin-top: 0;
-}
-
-.homePageLogo {
-  height: 110px;
-  margin-bottom: 15px;
-}
-
-.inputBox {
-  padding: 10px;
-  border-radius: 5px;
-  outline: none;
-  border: none;
-  margin-bottom: 14px;
-  background: #eee;
-  font-size: 16px;
-  font-weight: bold;
-  color: #000;
-}
-
-.btn {
-  border: none;
-  padding: 10px;
-  border-radius: 5px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s ease-in-out;
-}
-
-.joinBtn{
-  background: #4aed88;
-  width: 100px;
-  margin-left: auto;
-}
-
-.joinBtn:hover {
-  background: #2b824c;
-}
-
-.createInfo {
-  margin: 0 auto;
-  margin-top: 20px;
-}
-
-.createNewBtn {
-  color: #4aed88;
-  text-decoration: none;
-  border-bottom: 1px solid #4aed88;
-  transition: all 0.3s ease-in-out;
-}
-
-.createNewBtn:hover,
-footer a:hover {
-  color: #368654;
-  border-color: #368654;
-}
+/* =========================================
+   1. EDITOR & WORKSPACE UI (100% UNTOUCHED)
+========================================= */
 
 .mainWrap {
   display: grid;
@@ -302,25 +207,12 @@ footer a:hover {
   flex: 1;
 }
 
-/* .clientsList {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 20px;
-} */
-
 .clientsList {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 20px;
 }
-/* .client {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  font-weight: bold;
-} */
 
 .client {
   display: flex;
@@ -329,9 +221,6 @@ footer a:hover {
   font-weight: bold;
   justify-content: center;
 }
-/* .userName {
-  margin-top: 10px;
-} */
 
 .userName {
   margin-top: 8px;
@@ -587,8 +476,6 @@ footer a:hover {
 .rightTab:hover {
   color: #fff;
 }
-
-
 
 .appShell {
   display: grid;
@@ -981,4 +868,351 @@ footer a:hover {
     left: 0;
     right: 0;
     bottom: 0;
+}
+
+
+/* =========================================
+   2. BULLETPROOF DASHBOARD UI (NEW HOME PAGE)
+========================================= */
+
+.dash-container, .dash-container * {
+  box-sizing: border-box; /* 🎯 Ye sabse zaroori hai, taaki boxes stretch na ho */
+}
+
+.dash-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: #0b1121;
+  color: #f8fafc;
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+}
+
+/* SIDEBAR */
+.dash-sidebar {
+  width: 260px;
+  background-color: #070b15;
+  border-right: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+}
+
+.dash-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.dash-logo {
+  width: 35px;
+}
+
+.dash-brand-name {
+  font-size: 20px;
+  margin: 0;
+}
+
+.dash-brand-tag {
+  font-size: 11px;
+  color: #64748b;
+  margin: 0;
+}
+
+.dash-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.dash-nav-item {
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  text-align: left;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.dash-nav-item:hover {
+  background-color: #1e293b;
+  color: #fff;
+}
+
+.dash-nav-item.active {
+  background: linear-gradient(90deg, #3b82f6, #10b981);
+  color: white;
+  font-weight: 600;
+}
+
+.dash-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: #1e293b;
+  padding: 12px;
+  border-radius: 12px;
+  margin-top: auto;
+}
+
+.dash-avatar img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.dash-user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-user-name {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.dash-user-email {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* MAIN CONTENT */
+.dash-main {
+  flex: 1;
+  padding: 40px;
+  overflow-y: auto;
+}
+
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 40px;
+}
+
+.dash-header h1 {
+  font-size: 26px;
+  margin: 0 0 8px 0;
+}
+
+.dash-header p {
+  color: #94a3b8;
+  margin: 0;
+}
+
+.dash-header-actions {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.dash-theme-btn, .dash-logout-btn {
+  background: transparent;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.dash-logout-btn {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.dash-logout-btn:hover {
+  background: #ef4444;
+  color: white;
+}
+
+/* ROOMS GRID */
+.dash-section-title {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.dash-view-all {
+  color: #3b82f6;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dash-rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.dash-room-card {
+  background-color: #121927; /* Darker card */
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.dash-room-card:hover {
+  transform: translateY(-5px);
+  border-color: #3b82f6;
+}
+
+.dash-room-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.dash-room-card h4 {
+  margin: 0 0 8px 0;
+}
+
+.dash-room-members {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 20px;
+}
+
+.dash-room-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #64748b;
+  border-top: 1px solid #1e293b;
+  padding-top: 12px;
+}
+
+.dash-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* ACTION CARDS (Fixed Grid Layout) */
+.dash-action-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 30px;
+}
+
+.dash-action-card {
+  background-color: #121927;
+  padding: 30px;
+  border-radius: 12px;
+  border: 1px solid #1e293b;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-action-card h3 {
+  margin: 0 0 8px 0;
+}
+
+.dash-card-desc {
+  color: #94a3b8;
+  font-size: 13px;
+  margin: 0 0 25px 0;
+}
+
+.dash-illustration {
+  background-color: #0b1121;
+  height: 140px;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.dash-mock-window {
+  width: 120px;
+  height: 80px;
+  border: 1px solid #283548;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.dash-line {
+  height: 6px;
+  border-radius: 3px;
+  margin-bottom: 10px;
+}
+
+.dash-join-mock {
+  font-size: 24px;
+  letter-spacing: 5px;
+}
+
+.dash-btn-primary {
+  width: 100%;
+  background: linear-gradient(90deg, #3b82f6, #10b981);
+  color: white;
+  border: none;
+  padding: 14px;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: auto;
+}
+
+.dash-join-input-group {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.dash-input {
+  flex: 1;
+  background-color: #0b1121;
+  border: 1px solid #283548;
+  color: white;
+  padding: 12px 15px;
+  border-radius: 8px;
+  outline: none;
+}
+
+.dash-input:focus {
+  border-color: #3b82f6;
+}
+
+.dash-btn-secondary {
+  background-color: #8b5cf6;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* FOOTER FIXED */
+.dash-footer {
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+  padding: 20px 0;
+  border-top: 1px solid #1e293b;
+}
+
+.dash-footer a {
+  color: #10b981;
+  text-decoration: none;
 }
