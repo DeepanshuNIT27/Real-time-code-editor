@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+// 🟢 NEW: Firebase imports added here
+import { auth, googleProvider } from "./firebase";
+import { signInWithPopup } from "firebase/auth";
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -14,6 +17,10 @@ const AuthPage = () => {
   const [forgotStage, setForgotStage] = useState(1); // 1 = Enter Email, 2 = Enter OTP & New Password
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
+
+  // 🟢 NEW: Sign-Up OTP verification ke states
+  const [isSignupOtpMode, setIsSignupOtpMode] = useState(false);
+  const [signupOtp, setSignupOtp] = useState("");
 
   // --- Terminal Lines List ---
   const terminalLines = [
@@ -59,6 +66,37 @@ const AuthPage = () => {
 
   const navigate = useNavigate();
 
+  // 🟢 NEW: Google Login/Signup Handler added here
+  const handleGoogleLogin = async () => {
+    try {
+      // Firebase ka popup khulega
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+
+      // Backend ko data bhejo JWT token ke liye
+      const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email, username: user.displayName }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("username", data.username);
+        toast.success("Google Login successful!");
+        navigate("/home");
+      } else {
+        toast.error(data.error || "Google login failed");
+      }
+    } catch (error) {
+      console.error("Google Auth error:", error);
+      toast.error("Google login cancelled or failed");
+    }
+  };
+
   // 🟢 Normal Login/Signup Handler
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -79,10 +117,17 @@ const AuthPage = () => {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("username", data.username);
-        toast.success(isLogin ? "Logged in successfully!" : "Account created!");
-        navigate("/home");
+        if (isLogin) {
+          // Login hai toh direct home page par bhej do
+          localStorage.setItem("token", data.token);
+          localStorage.setItem("username", data.username);
+          toast.success("Logged in successfully!");
+          navigate("/home");
+        } else {
+          // 🟢 SIGNUP hai toh OTP screen dikhao
+          toast.success(data.message || "Verification OTP sent to your email!");
+          setIsSignupOtpMode(true);
+        }
       } else {
         toast.error(data.error || "Authentication failed");
       }
@@ -92,7 +137,41 @@ const AuthPage = () => {
     }
   };
 
-  // 🟢 Send OTP Handler
+  // 🟢 NEW: Verify Sign-Up OTP Handler
+  const handleVerifySignup = async (e) => {
+    e.preventDefault();
+    if (!signupOtp) return toast.error("Please enter the 6-digit OTP");
+
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+    const toastId = toast.loading("Verifying OTP...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/verify-signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp: signupOtp }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || "Account verified successfully!", {
+          id: toastId,
+        });
+        // OTP verify hone ke baad user ko automatically login karwa do
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("username", data.username);
+        navigate("/home");
+      } else {
+        toast.error(data.error || "Verification failed", { id: toastId });
+      }
+    } catch (error) {
+      console.error("Verification error:", error);
+      toast.error("Server error during verification!", { id: toastId });
+    }
+  };
+
+  // 🟢 Send OTP Handler (Forgot Password)
   const handleSendOTP = async (e) => {
     e.preventDefault();
     if (!email) return toast.error("Please enter your email first");
@@ -325,6 +404,43 @@ const AuthPage = () => {
                 </span>
               </p>
             </>
+          ) : isSignupOtpMode ? (
+            /* ========================================== */
+            /* 🟢 SIGNUP OTP VERIFICATION VIEW */
+            /* ========================================== */
+            <>
+              <h2 style={styles.cardTitle}>Verify Account</h2>
+              <p style={styles.cardSubtitle}>
+                Enter the 6-digit verification OTP sent to {email}
+              </p>
+
+              <form onSubmit={handleVerifySignup} style={styles.form}>
+                <div style={styles.inputWrapper}>
+                  <span style={styles.inputIcon}>🔑</span>
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit OTP"
+                    value={signupOtp}
+                    onChange={(e) => setSignupOtp(e.target.value)}
+                    required
+                    style={styles.input}
+                  />
+                </div>
+                <button type="submit" style={styles.submitButton}>
+                  Verify & Register 🚀
+                </button>
+              </form>
+
+              <p style={styles.switchPrompt}>
+                Wrong email?{" "}
+                <span
+                  onClick={() => setIsSignupOtpMode(false)}
+                  style={styles.switchLink}
+                >
+                  Back to Sign Up
+                </span>
+              </p>
+            </>
           ) : (
             /* ========================================== */
             /* 🟢 NORMAL LOGIN / SIGNUP VIEW */
@@ -410,7 +526,6 @@ const AuthPage = () => {
                     </label>
                     <span
                       style={styles.forgotPassword}
-                      // 🟢 Yahan click karne par Forgot Password view khulega
                       onClick={() => setIsForgotPasswordMode(true)}
                     >
                       Forgot password?
@@ -423,18 +538,19 @@ const AuthPage = () => {
                 </button>
               </form>
 
-              <div style={styles.divider}>or continue with</div>
-              <div style={styles.socialContainer}>
-                <button style={styles.socialBtn} title="GitHub">
-                  🐙
-                </button>
-                <button style={styles.socialBtn} title="Google">
-                  🔍
-                </button>
-                <button style={styles.socialBtn} title="Discord">
-                  💬
-                </button>
-              </div>
+              {/* 🟢 CHANGED: Dummy toast ki jagah handleGoogleLogin function laga diya gaya hai */}
+              <button
+                type="button"
+                style={styles.googleBtn}
+                onClick={handleGoogleLogin}
+              >
+                <img
+                  src="https://www.svgrepo.com/show/475656/google-color.svg"
+                  alt="Google"
+                  style={styles.googleIcon}
+                />
+                Continue with Google
+              </button>
 
               <p style={styles.switchPrompt}>
                 {isLogin
@@ -659,24 +775,31 @@ const styles = {
     marginTop: "5px",
     boxShadow: "0 4px 15px rgba(0, 245, 212, 0.2)",
   },
-  divider: {
+
+  // 🟢 NEW: Google Button styling
+  googleBtn: {
     display: "flex",
     alignItems: "center",
-    color: "#4b5563",
-    fontSize: "11px",
-    margin: "20px 0",
-    gap: "10px",
-  },
-  socialContainer: { display: "flex", gap: "10px", marginBottom: "20px" },
-  socialBtn: {
-    flex: 1,
-    padding: "10px",
-    backgroundColor: "rgba(30, 41, 59, 0.3)",
-    border: "1px solid #1e293b",
+    justifyContent: "center",
+    width: "100%",
+    padding: "12px",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    border: "1px solid rgba(255,255,255,0.1)",
     borderRadius: "8px",
+    color: "#e2e8f0",
+    fontSize: "14px",
+    fontWeight: "600",
     cursor: "pointer",
-    fontSize: "16px",
+    marginTop: "20px",
+    marginBottom: "20px",
+    transition: "all 0.3s ease",
   },
+  googleIcon: {
+    width: "20px",
+    height: "20px",
+    marginRight: "10px",
+  },
+
   switchPrompt: {
     color: "#64748b",
     textAlign: "center",

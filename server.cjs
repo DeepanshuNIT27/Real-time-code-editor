@@ -59,6 +59,16 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model("User", userSchema);
 
+// 🟢 NEW SCHEMA: Sign-Up Verification se pehle temporary user data store karne ke liye
+const tempUserSchema = new mongoose.Schema({
+  username: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  otp: { type: String, required: true },
+  otpExpires: { type: Date, required: true },
+});
+const TempUser = mongoose.model("TempUser", tempUserSchema);
+
 // ==========================================
 // 🟢 Nodemailer Transporter & OTP Function
 // ==========================================
@@ -125,10 +135,12 @@ app.post("/api/video/token", async (req, res) => {
   }
 });
 
-// 🟢 Signup API
+// 🟢 Signup API (UPDATED: Bhejegha OTP, Data temporary store karega)
 app.post("/api/auth/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
+
+    // 1. Check karo permanent DB me user pehle se toh nahi hai
     const existingUser = await User.findOne({ email });
     if (existingUser)
       return res.status(400).json({ error: "Email already in use" });
@@ -136,22 +148,92 @@ app.post("/api/auth/signup", async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const newUser = new User({ username, email, password: hashedPassword });
+    // 2. OTP aur Expiry Time (10 mins) generate karo
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiryTime = Date.now() + 10 * 60 * 1000;
+
+    // 3. Purana koi adhoora signup data pada ho toh clear kardo
+    await TempUser.deleteOne({ email });
+
+    // 4. Temporary collection me data save karo
+    const tempUser = new TempUser({
+      username,
+      email,
+      password: hashedPassword,
+      otp,
+      otpExpires: expiryTime,
+    });
+    await tempUser.save();
+
+    // 5. Email send karo
+    const emailRes = await sendOTPWithEmail(email, otp, "signup");
+
+    if (emailRes.success) {
+      res.status(200).json({ message: "Verification OTP sent to your email!" });
+    } else {
+      res.status(500).json({ error: "Failed to send verification email" });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error during signup request" });
+  }
+});
+
+// ==========================================
+// 🟢 NEW ENDPOINT: Verify SignUp OTP & Create Account
+// ==========================================
+app.post("/api/auth/verify-signup", async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    const tempUser = await TempUser.findOne({ email });
+
+    if (!tempUser) {
+      return res
+        .status(404)
+        .json({ error: "Signup session expired. Please register again." });
+    }
+
+    if (tempUser.otp !== otp) {
+      return res.status(400).json({ error: "Invalid OTP code" });
+    }
+
+    if (Date.now() > tempUser.otpExpires) {
+      return res
+        .status(400)
+        .json({ error: "OTP has expired. Please sign up again." });
+    }
+
+    // OTP Sahi hai -> Move data to permanent User Collection
+    const newUser = new User({
+      username: tempUser.username,
+      email: tempUser.email,
+      password: tempUser.password, // Pehle se hashed hai
+    });
     await newUser.save();
 
+    // Temporary data clear karo
+    await TempUser.deleteOne({ email });
+
+    // JWT token generate karke sidha login state do
     const token = jwt.sign(
-      { id: newUser._id, username },
+      { id: newUser._id, username: newUser.username },
       process.env.JWT_SECRET,
       { expiresIn: "7d" },
     );
-    res
-      .status(201)
-      .json({ token, username, message: "User created successfully" });
+
+    res.status(201).json({
+      token,
+      username: newUser.username,
+      message: "Account verified and created successfully!",
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Server error during signup" });
+    res
+      .status(500)
+      .json({ error: "Server error during registration verification" });
   }
 });
+// ==========================================
 
 // 🟢 Login API
 app.post("/api/auth/login", async (req, res) => {
@@ -180,8 +262,51 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 // ==========================================
-// 🟢 NEW ENDPOINT: Forgot Password (Send OTP)
+// 🟢 NEW ENDPOINT: Google Login/Signup
 // ==========================================
+app.post("/api/auth/google", async (req, res) => {
+  try {
+    const { email, username } = req.body;
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      // Agar user naya hai toh ek random secure password dekar account bana denge
+      const randomPassword =
+        Math.random().toString(36).slice(-8) + Date.now().toString(36);
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(randomPassword, salt);
+
+      user = new User({
+        username: username || "Google User",
+        email,
+        password: hashedPassword,
+      });
+      await user.save();
+    }
+
+    // Purana user ho ya naya, standard JWT token generate karke bhej do
+    const token = jwt.sign(
+      { id: user._id, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+
+    res
+      .status(200)
+      .json({
+        token,
+        username: user.username,
+        message: "Google Login successful",
+      });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error during Google login" });
+  }
+});
+// ==========================================
+
+// 🟢 NEW ENDPOINT: Forgot Password (Send OTP)
 app.post("/api/auth/forgot-password", async (req, res) => {
   try {
     const { email } = req.body;
@@ -192,10 +317,7 @@ app.post("/api/auth/forgot-password", async (req, res) => {
         .status(404)
         .json({ error: "User with this email does not exist" });
 
-    // 6-digit random OTP generation
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Expiry time set kiya 10 minutes ka
     const expiryTime = Date.now() + 10 * 60 * 1000;
 
     user.resetOTP = otp;
@@ -215,9 +337,7 @@ app.post("/api/auth/forgot-password", async (req, res) => {
   }
 });
 
-// ==========================================
 // 🟢 NEW ENDPOINT: Reset Password (Verify OTP & Update)
-// ==========================================
 app.post("/api/auth/reset-password", async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
@@ -225,7 +345,6 @@ app.post("/api/auth/reset-password", async (req, res) => {
 
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // Check agar OTP sahi hai ya expire toh nahi hua
     if (!user.resetOTP || user.resetOTP !== otp) {
       return res.status(400).json({ error: "Invalid OTP code" });
     }
@@ -236,12 +355,11 @@ app.post("/api/auth/reset-password", async (req, res) => {
         .json({ error: "OTP has expired. Please request a new one" });
     }
 
-    // Naya password hash karke update karo
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
     user.password = hashedPassword;
-    user.resetOTP = null; // Use karne ke baad clear kardo
+    user.resetOTP = null;
     user.resetOTPExpires = null;
     await user.save();
 
@@ -253,7 +371,6 @@ app.post("/api/auth/reset-password", async (req, res) => {
     res.status(500).json({ error: "Server error during reset-password" });
   }
 });
-// ==========================================
 
 // 🟢 Token Verification Middleware
 const authenticateToken = (req, res, next) => {
@@ -281,12 +398,10 @@ app.post("/api/rooms/save", authenticateToken, async (req, res) => {
     if (existingRoomIndex !== -1) {
       user.rooms[existingRoomIndex].lastAccessed = Date.now();
 
-      // Forcefully update files
       if (files && files.length > 0) {
         user.rooms[existingRoomIndex].files = files;
       }
 
-      // 🟢 STRICT CHECK: Jab Save dabaya jaye tabhi true set ho
       if (isSaved === true) {
         user.rooms[existingRoomIndex].isSaved = true;
       }
@@ -300,7 +415,6 @@ app.post("/api/rooms/save", authenticateToken, async (req, res) => {
       });
     }
 
-    // 🔴 BRAHMASTRA: Iske bina Mongoose nested array save nahi karega
     user.markModified("rooms");
 
     await user.save();
@@ -318,7 +432,6 @@ app.get("/api/rooms/history", authenticateToken, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    // 🟢 STRICT CHECK: Sirf unhi rooms ko filter karega jo actively save kiye gaye the
     const savedRooms = user.rooms.filter((r) => r.isSaved === true);
 
     const sortedRooms = savedRooms.sort(
@@ -342,7 +455,6 @@ app.delete("/api/rooms/:roomId", authenticateToken, async (req, res) => {
 
     user.rooms = user.rooms.filter((r) => r.roomId !== roomId);
 
-    // Yahan bhi zarurat pad sakti hai agar array length badal rahi ho
     user.markModified("rooms");
 
     await user.save();
