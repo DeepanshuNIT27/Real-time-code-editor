@@ -9,6 +9,12 @@ const AuthPage = () => {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
 
+  // 🟢 Naye states Forgot Password flow ke liye
+  const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
+  const [forgotStage, setForgotStage] = useState(1); // 1 = Enter Email, 2 = Enter OTP & New Password
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+
   // --- Terminal Lines List ---
   const terminalLines = [
     "$ initializing workspace...",
@@ -53,6 +59,7 @@ const AuthPage = () => {
 
   const navigate = useNavigate();
 
+  // 🟢 Normal Login/Signup Handler
   const handleSubmit = async (e) => {
     e.preventDefault();
     const endpoint = isLogin ? "/api/auth/login" : "/api/auth/signup";
@@ -60,11 +67,9 @@ const AuthPage = () => {
       ? { email, password }
       : { username: name, email, password };
 
-    // 👇 Yahan hum .env file se backend ka URL nikal rahe hain
     const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
     try {
-      // 👇 Localhost hata kar API_BASE_URL laga diya
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,6 +89,68 @@ const AuthPage = () => {
     } catch (error) {
       console.error("Auth error:", error);
       toast.error("Server error! Backend chalu hai ya nahi check karo.");
+    }
+  };
+
+  // 🟢 Send OTP Handler
+  const handleSendOTP = async (e) => {
+    e.preventDefault();
+    if (!email) return toast.error("Please enter your email first");
+
+    const toastId = toast.loading("Sending OTP to your email...");
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message, { id: toastId });
+        setForgotStage(2); // Stage 2 par le jao
+      } else {
+        toast.error(data.error || "Failed to send OTP", { id: toastId });
+      }
+    } catch (error) {
+      console.error("OTP error:", error);
+      toast.error("Server error!", { id: toastId });
+    }
+  };
+
+  // 🟢 Reset Password Handler
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!otp || !newPassword) return toast.error("Please fill all fields");
+
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp, newPassword }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message);
+        // Reset karke wapas login screen par bhej do
+        setIsForgotPasswordMode(false);
+        setForgotStage(1);
+        setOtp("");
+        setNewPassword("");
+        setPassword("");
+      } else {
+        toast.error(data.error || "Failed to reset password");
+      }
+    } catch (error) {
+      console.error("Reset error:", error);
+      toast.error("Server error!");
     }
   };
 
@@ -184,115 +251,204 @@ const AuthPage = () => {
       {/* RIGHT COLUMN: GLASS CARD AUTH */}
       <div style={styles.rightColumn}>
         <div style={styles.card}>
-          <h2 style={styles.cardTitle}>Welcome Back</h2>
-          <p style={styles.cardSubtitle}>
-            Sign in to continue to your workspace
-          </p>
+          {/* ========================================== */}
+          {/* 🟢 FORGOT PASSWORD VIEW */}
+          {/* ========================================== */}
+          {isForgotPasswordMode ? (
+            <>
+              <h2 style={styles.cardTitle}>Reset Password</h2>
+              <p style={styles.cardSubtitle}>
+                {forgotStage === 1
+                  ? "Enter your email to receive a recovery OTP"
+                  : `OTP sent to ${email}`}
+              </p>
 
-          <div style={styles.tabContainer}>
-            <button
-              onClick={() => setIsLogin(true)}
-              style={{
-                ...styles.tabButton,
-                color: isLogin ? "#00F5D4" : "#64748b",
-                borderBottom: isLogin ? "2px solid #00F5D4" : "none",
-              }}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => setIsLogin(false)}
-              style={{
-                ...styles.tabButton,
-                color: !isLogin ? "#00F5D4" : "#64748b",
-                borderBottom: !isLogin ? "2px solid #00F5D4" : "none",
-              }}
-            >
-              Sign Up
-            </button>
-          </div>
+              {forgotStage === 1 ? (
+                // STAGE 1: Request OTP
+                <form onSubmit={handleSendOTP} style={styles.form}>
+                  <div style={styles.inputWrapper}>
+                    <span style={styles.inputIcon}>✉️</span>
+                    <input
+                      type="email"
+                      placeholder="Email Address"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      style={styles.input}
+                    />
+                  </div>
+                  <button type="submit" style={styles.submitButton}>
+                    Send OTP
+                  </button>
+                </form>
+              ) : (
+                // STAGE 2: Verify OTP and Set New Password
+                <form onSubmit={handleResetPassword} style={styles.form}>
+                  <div style={styles.inputWrapper}>
+                    <span style={styles.inputIcon}>🔑</span>
+                    <input
+                      type="text"
+                      placeholder="Enter 6-digit OTP"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      required
+                      style={styles.input}
+                    />
+                  </div>
+                  <div style={styles.inputWrapper}>
+                    <span style={styles.inputIcon}>🔒</span>
+                    <input
+                      type="password"
+                      placeholder="New Password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      style={styles.input}
+                    />
+                  </div>
+                  <button type="submit" style={styles.submitButton}>
+                    Update Password
+                  </button>
+                </form>
+              )}
 
-          <form onSubmit={handleSubmit} style={styles.form}>
-            {!isLogin && (
-              <div style={styles.inputWrapper}>
-                <span style={styles.inputIcon}>👤</span>
-                <input
-                  type="text"
-                  placeholder="Full Name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  style={styles.input}
-                />
+              <p style={styles.switchPrompt}>
+                Remember your password?{" "}
+                <span
+                  onClick={() => {
+                    setIsForgotPasswordMode(false);
+                    setForgotStage(1);
+                  }}
+                  style={styles.switchLink}
+                >
+                  Back to Login
+                </span>
+              </p>
+            </>
+          ) : (
+            /* ========================================== */
+            /* 🟢 NORMAL LOGIN / SIGNUP VIEW */
+            /* ========================================== */
+            <>
+              <h2 style={styles.cardTitle}>Welcome Back</h2>
+              <p style={styles.cardSubtitle}>
+                Sign in to continue to your workspace
+              </p>
+
+              <div style={styles.tabContainer}>
+                <button
+                  onClick={() => setIsLogin(true)}
+                  style={{
+                    ...styles.tabButton,
+                    color: isLogin ? "#00F5D4" : "#64748b",
+                    borderBottom: isLogin ? "2px solid #00F5D4" : "none",
+                  }}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => setIsLogin(false)}
+                  style={{
+                    ...styles.tabButton,
+                    color: !isLogin ? "#00F5D4" : "#64748b",
+                    borderBottom: !isLogin ? "2px solid #00F5D4" : "none",
+                  }}
+                >
+                  Sign Up
+                </button>
               </div>
-            )}
 
-            <div style={styles.inputWrapper}>
-              <span style={styles.inputIcon}>✉️</span>
-              <input
-                type="email"
-                placeholder="Email Address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                style={styles.input}
-              />
-            </div>
+              <form onSubmit={handleSubmit} style={styles.form}>
+                {!isLogin && (
+                  <div style={styles.inputWrapper}>
+                    <span style={styles.inputIcon}>👤</span>
+                    <input
+                      type="text"
+                      placeholder="Full Name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                      style={styles.input}
+                    />
+                  </div>
+                )}
 
-            <div style={styles.inputWrapper}>
-              <span style={styles.inputIcon}>🔒</span>
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                style={styles.input}
-              />
-            </div>
-
-            {isLogin && (
-              <div style={styles.formOptions}>
-                <label style={styles.checkboxLabel}>
+                <div style={styles.inputWrapper}>
+                  <span style={styles.inputIcon}>✉️</span>
                   <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    style={{ accentColor: "#00F5D4" }}
+                    type="email"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    style={styles.input}
                   />
-                  Remember me
-                </label>
-                <span style={styles.forgotPassword}>Forgot password?</span>
+                </div>
+
+                <div style={styles.inputWrapper}>
+                  <span style={styles.inputIcon}>🔒</span>
+                  <input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    style={styles.input}
+                  />
+                </div>
+
+                {isLogin && (
+                  <div style={styles.formOptions}>
+                    <label style={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        checked={rememberMe}
+                        onChange={(e) => setRememberMe(e.target.checked)}
+                        style={{ accentColor: "#00F5D4" }}
+                      />
+                      Remember me
+                    </label>
+                    <span
+                      style={styles.forgotPassword}
+                      // 🟢 Yahan click karne par Forgot Password view khulega
+                      onClick={() => setIsForgotPasswordMode(true)}
+                    >
+                      Forgot password?
+                    </span>
+                  </div>
+                )}
+
+                <button type="submit" style={styles.submitButton}>
+                  {isLogin ? "Sign In" : "Sign Up"}
+                </button>
+              </form>
+
+              <div style={styles.divider}>or continue with</div>
+              <div style={styles.socialContainer}>
+                <button style={styles.socialBtn} title="GitHub">
+                  🐙
+                </button>
+                <button style={styles.socialBtn} title="Google">
+                  🔍
+                </button>
+                <button style={styles.socialBtn} title="Discord">
+                  💬
+                </button>
               </div>
-            )}
 
-            <button type="submit" style={styles.submitButton}>
-              {isLogin ? "Sign In" : "Sign Up"}
-            </button>
-          </form>
-
-          <div style={styles.divider}>or continue with</div>
-          <div style={styles.socialContainer}>
-            <button style={styles.socialBtn} title="GitHub">
-              🐙
-            </button>
-            <button style={styles.socialBtn} title="Google">
-              🔍
-            </button>
-            <button style={styles.socialBtn} title="Discord">
-              💬
-            </button>
-          </div>
-
-          <p style={styles.switchPrompt}>
-            {isLogin ? "Don't have an account? " : "Already have an account? "}
-            <span
-              onClick={() => setIsLogin(!isLogin)}
-              style={styles.switchLink}
-            >
-              {isLogin ? "Sign Up" : "Sign In"}
-            </span>
-          </p>
+              <p style={styles.switchPrompt}>
+                {isLogin
+                  ? "Don't have an account? "
+                  : "Already have an account? "}
+                <span
+                  onClick={() => setIsLogin(!isLogin)}
+                  style={styles.switchLink}
+                >
+                  {isLogin ? "Sign Up" : "Sign In"}
+                </span>
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -533,8 +689,6 @@ const styles = {
     fontWeight: "600",
     marginLeft: "5px",
   },
-
 };
-
 
 export default AuthPage;

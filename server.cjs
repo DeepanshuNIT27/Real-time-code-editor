@@ -8,10 +8,11 @@ const ACTIONS = require("./src/Actions.cjs");
 const { StreamClient } = require("@stream-io/node-sdk");
 require("dotenv").config();
 
-// 🟢 Database aur Auth ke liye imports
+// 🟢 Database, Auth aur Mail ke liye imports
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer"); // 🟢 ADDED: Nodemailer import
 
 const server = http.createServer(app);
 
@@ -31,11 +32,13 @@ mongoose
   .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
-// 🟢 User Schema Updated with Room History, isSaved flag and Files array
+// 🟢 User Schema Updated with Room History, isSaved flag, Files array, and OTP fields
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  resetOTP: { type: String, default: null }, // 🟢 NEW: Password reset OTP store karne ke liye
+  resetOTPExpires: { type: Date, default: null }, // 🟢 NEW: OTP expiry time ke liye
   rooms: [
     {
       roomId: String,
@@ -55,6 +58,46 @@ const userSchema = new mongoose.Schema({
   ],
 });
 const User = mongoose.model("User", userSchema);
+
+// ==========================================
+// 🟢 Nodemailer Transporter & OTP Function
+// ==========================================
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+const sendOTPWithEmail = async (userEmail, otp, type) => {
+  let subject = "";
+  let messageText = "";
+
+  if (type === "signup") {
+    subject = "Verify your CodeSync Account";
+    messageText = `Welcome to CodeSync! Your verification OTP is: ${otp}. This OTP is valid for 10 minutes.`;
+  } else if (type === "forgot") {
+    subject = "Reset your CodeSync Password";
+    messageText = `You requested a password reset. Your OTP is: ${otp}. Do not share this OTP with anyone.`;
+  }
+
+  const mailOptions = {
+    from: `"CodeSync Team" <${process.env.EMAIL_USER}>`,
+    to: userEmail,
+    subject: subject,
+    text: messageText,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error("Email send error:", error);
+    return { success: false, error };
+  }
+};
+// ==========================================
 
 const io = new Server(server, {
   cors: { origin: true, credentials: true, methods: ["GET", "POST"] },
@@ -135,6 +178,82 @@ app.post("/api/auth/login", async (req, res) => {
     res.status(500).json({ error: "Server error during login" });
   }
 });
+
+// ==========================================
+// 🟢 NEW ENDPOINT: Forgot Password (Send OTP)
+// ==========================================
+app.post("/api/auth/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user)
+      return res
+        .status(404)
+        .json({ error: "User with this email does not exist" });
+
+    // 6-digit random OTP generation
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Expiry time set kiya 10 minutes ka
+    const expiryTime = Date.now() + 10 * 60 * 1000;
+
+    user.resetOTP = otp;
+    user.resetOTPExpires = expiryTime;
+    await user.save();
+
+    const emailRes = await sendOTPWithEmail(email, otp, "forgot");
+
+    if (emailRes.success) {
+      res.status(200).json({ message: "OTP sent successfully to your email" });
+    } else {
+      res.status(500).json({ error: "Failed to send email OTP" });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error during forgot-password" });
+  }
+});
+
+// ==========================================
+// 🟢 NEW ENDPOINT: Reset Password (Verify OTP & Update)
+// ==========================================
+app.post("/api/auth/reset-password", async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Check agar OTP sahi hai ya expire toh nahi hua
+    if (!user.resetOTP || user.resetOTP !== otp) {
+      return res.status(400).json({ error: "Invalid OTP code" });
+    }
+
+    if (Date.now() > user.resetOTPExpires) {
+      return res
+        .status(400)
+        .json({ error: "OTP has expired. Please request a new one" });
+    }
+
+    // Naya password hash karke update karo
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    user.password = hashedPassword;
+    user.resetOTP = null; // Use karne ke baad clear kardo
+    user.resetOTPExpires = null;
+    await user.save();
+
+    res
+      .status(200)
+      .json({ message: "Password updated successfully. You can login now!" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Server error during reset-password" });
+  }
+});
+// ==========================================
 
 // 🟢 Token Verification Middleware
 const authenticateToken = (req, res, next) => {
