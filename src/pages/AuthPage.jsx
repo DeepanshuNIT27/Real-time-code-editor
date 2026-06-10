@@ -60,8 +60,12 @@ const AuthPage = () => {
       ? { email, password }
       : { username: name, email, password };
 
+    // 👇 Yahan hum .env file se backend ka URL nikal rahe hain
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+
     try {
-      const response = await fetch(`http://localhost:5000${endpoint}`, {
+      // 👇 Localhost hata kar API_BASE_URL laga diya
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
