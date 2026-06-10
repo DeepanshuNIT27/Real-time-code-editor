@@ -50,12 +50,8 @@ const Home = () => {
     const id = uuidv4();
     setRoomId(id);
 
-    // 🟢 MAHA BADLAV: Yahan se API Save wala code hata diya gaya hai.
-    // Ab room DB me save nahi hoga jab tak Editor me Save button na dabaya jaye.
-
     toast.success(`Created room: ${finalRoomName}. Joining now!`);
 
-    // 🟢 CHANGE 1: Create karte hi sidha join karwao aur roomName sath bhejo
     navigate(`/editor/${id}`, {
       state: {
         username: username.trim(),
@@ -75,16 +71,13 @@ const Home = () => {
       return;
     }
 
-    // 🟢 MAHA BADLAV: Yahan se bhi API Save wala code hata diya gaya hai.
-    // Sidha navigate karega bina save kiye.
-
     const existingRoom = historyRooms.find((r) => r.roomId === safeRoomId);
 
     navigate(`/editor/${safeRoomId}`, {
       state: {
         username: safeUsername,
         files: existingRoom?.files,
-        roomName: existingRoom?.name || "Collab Room", // 🟢 CHANGE 2: Purana naam Editor ko bhejo
+        roomName: existingRoom?.name || "Collab Room",
       },
     });
   };
@@ -111,9 +104,40 @@ const Home = () => {
       state: {
         username: username.trim(),
         files: room.files,
-        roomName: room.name, // 🟢 CHANGE 3: History se jate waqt room ka naam bhejo
+        roomName: room.name,
       },
     });
+  };
+
+  const deleteRoom = async (e, idToDelete) => {
+    e.stopPropagation();
+
+    const confirmDelete = window.confirm(
+      "Are you sure you want to delete this room and all its saved code?",
+    );
+    if (!confirmDelete) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/rooms/${idToDelete}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        toast.success("Room deleted successfully");
+        setHistoryRooms((prev) =>
+          prev.filter((r) => r.roomId !== idToDelete && r._id !== idToDelete),
+        );
+      } else {
+        toast.error("Failed to delete room");
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error("An error occurred while deleting");
+    }
   };
 
   return (
@@ -159,7 +183,11 @@ const Home = () => {
       </aside>
 
       {/* RIGHT MAIN CONTENT */}
-      <main className="dash-main">
+      {/* 🟢 CHANGE: main container me Flexbox aur vh height check lagaya hai takqi footer push ho sake */}
+      <main
+        className="dash-main"
+        style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
+      >
         {activeTab === "home" ? (
           <>
             <header className="dash-header">
@@ -168,7 +196,6 @@ const Home = () => {
                 <p>Let's code something amazing today.</p>
               </div>
               <div className="dash-header-actions">
-                <button className="dash-theme-btn">☀️ 🌙</button>
                 <button className="dash-logout-btn" onClick={handleLogout}>
                   Logout 🚪
                 </button>
@@ -185,7 +212,18 @@ const Home = () => {
                   View all rooms →
                 </span>
               </div>
-              <div className="dash-rooms-grid">
+              <div
+                className="dash-rooms-grid"
+                style={
+                  historyRooms.length > 0 && historyRooms.length < 4
+                    ? {
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, 1fr)",
+                        gap: "20px",
+                      }
+                    : {}
+                }
+              >
                 {historyRooms.length === 0 ? (
                   <p style={{ color: "#64748b", fontSize: "14px" }}>
                     No previous rooms found. Create or join one below!
@@ -303,7 +341,18 @@ const Home = () => {
             </header>
 
             <section className="dash-section">
-              <div className="dash-rooms-grid">
+              <div
+                className="dash-rooms-grid"
+                style={
+                  historyRooms.length > 0 && historyRooms.length < 4
+                    ? {
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, 1fr)",
+                        gap: "20px",
+                      }
+                    : {}
+                }
+              >
                 {historyRooms.length === 0 ? (
                   <p style={{ color: "#64748b", fontSize: "14px" }}>
                     You haven't joined or created any rooms yet.
@@ -313,7 +362,6 @@ const Home = () => {
                     <div
                       className="dash-room-card"
                       key={room._id || room.roomId}
-                      onClick={() => joinFromHistory(room)}
                     >
                       <div
                         className="dash-room-icon"
@@ -328,7 +376,10 @@ const Home = () => {
                       <p className="dash-room-members">
                         Room ID: {room.roomId}
                       </p>
-                      <div className="dash-room-footer">
+                      <div
+                        className="dash-room-footer"
+                        style={{ marginBottom: "15px" }}
+                      >
                         <span>
                           Last accessed:{" "}
                           {new Date(room.lastAccessed).toLocaleDateString()}
@@ -338,6 +389,32 @@ const Home = () => {
                           style={{ backgroundColor: room.color }}
                         ></div>
                       </div>
+
+                      <div style={{ display: "flex", gap: "10px" }}>
+                        <button
+                          className="dash-btn-secondary"
+                          style={{ flex: 1, padding: "8px", fontSize: "13px" }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            joinFromHistory(room);
+                          }}
+                        >
+                          Join
+                        </button>
+                        <button
+                          className="dash-btn-primary"
+                          style={{
+                            flex: 1,
+                            padding: "8px",
+                            fontSize: "13px",
+                            backgroundColor: "#ef4444",
+                            border: "none",
+                          }}
+                          onClick={(e) => deleteRoom(e, room.roomId)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -346,7 +423,11 @@ const Home = () => {
           </>
         )}
 
-        <footer className="dash-footer">
+        {/* 🟢 CHANGE: Footer me marginTop auto dekar isko stick kar diya hai */}
+        <footer
+          className="dash-footer"
+          style={{ marginTop: "auto", padding: "20px 0" }}
+        >
           Built with ❤️ by{" "}
           <a href="https://github.com/DeepanshuNIT27">Deepanshu Sahu</a>
         </footer>
