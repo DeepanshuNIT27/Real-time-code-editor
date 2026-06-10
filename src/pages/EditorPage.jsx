@@ -83,7 +83,14 @@ const EditorPage = () => {
 // Internal Collaborative Workspace Container System
 const EditorPageContent = ({ roomId, locationState }) => {
   const socketRef = useRef(null);
-  const codeRef = useRef(null);
+
+  // 🟢 FIX 1: codeRef ko null ki jagah initial loaded file ke content se start kiya taaki code gayab na ho
+  const codeRef = useRef(
+    locationState?.files && locationState.files.length > 0
+      ? locationState.files[0].content
+      : "",
+  );
+
   const reactNavigator = useNavigate();
 
   const [clients, setClients] = useState([]);
@@ -91,10 +98,19 @@ const EditorPageContent = ({ roomId, locationState }) => {
   const [activeLeftPanel, setActiveLeftPanel] = useState("editor");
   const [currentSocketId, setCurrentSocketId] = useState(null);
 
-  const [files, setFiles] = useState([
-    { id: "1", name: "main.cpp", content: "" },
-  ]);
-  const [activeFileId, setActiveFileId] = useState("1");
+  // 🟢 CHANGE START: Agar Home se purani 'files' aayi hain toh load karo, warna default main.cpp
+  const [files, setFiles] = useState(
+    locationState?.files && locationState.files.length > 0
+      ? locationState.files
+      : [{ id: "1", name: "main.cpp", content: "" }],
+  );
+
+  const [activeFileId, setActiveFileId] = useState(
+    locationState?.files && locationState.files.length > 0
+      ? locationState.files[0].id
+      : "1",
+  );
+  // 🟢 CHANGE END
 
   // MASTER FIX 1: Socket ke andar fresh state access karne ke liye refs lagaye (Stale Closure fix)
   const filesRef = useRef(files);
@@ -240,6 +256,49 @@ const EditorPageContent = ({ roomId, locationState }) => {
     reactNavigator("/");
   }
 
+  // 🟢 NAYA FUNCTION: DB me files save karne ke liye (Ab dynamic URL ke sath)
+  const handleSaveRoom = async () => {
+    try {
+      // Pehle current screen wala code files array me update karo
+      const currentCode = codeRef.current || "";
+      const updatedFilesForDB = filesRef.current.map((f) =>
+        f.id === activeFileIdRef.current ? { ...f, content: currentCode } : f,
+      );
+
+      const token = localStorage.getItem("token");
+
+      // 🟢 CHANGE: Local ke liye localhost, deploy hone par .env wala URL chalega
+      const backendUrl =
+        import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+
+      const response = await fetch(`${backendUrl}/api/rooms/save`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          roomId,
+          // 🟢 FIX 2: Ab asli roomName jayega backend me
+          name: locationState?.roomName || "Collab Room",
+          isSaved: true,
+          files: updatedFilesForDB,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success("Files saved successfully!");
+      } else {
+        const errorData = await response.json();
+        console.error("Save Error:", errorData);
+        toast.error(errorData.error || "Failed to save files.");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("An error occurred while saving.");
+    }
+  };
+
   return (
     <VideoCallProvider
       userId={currentSocketId || "temp-id"}
@@ -253,7 +312,8 @@ const EditorPageContent = ({ roomId, locationState }) => {
             <img className="topLogo" src="/code-sync.png" alt="CodeSync Logo" />
             <div className="roomInfo">
               <span className="roomName">
-                Room: {locationState?.username}'s Room
+                {/* 🟢 FIX 3: Top bar me bhi asli naam dikhega */}
+                Room: {locationState?.roomName || "Collab Room"}
               </span>
               <span className="onlineBadge">● Online ({clients.length})</span>
             </div>
@@ -399,9 +459,11 @@ const EditorPageContent = ({ roomId, locationState }) => {
             </div>
 
             <div className="outputSectionWrapper">
+              {/* 🟢 YAHAN CHANGE KIYA HAI: onSave prop add kar diya */}
               <Output
                 getCode={() => codeRef.current}
                 languageId={getCurrentLanguageId}
+                onSave={handleSaveRoom}
               />
             </div>
           </div>

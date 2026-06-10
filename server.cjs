@@ -31,7 +31,7 @@ mongoose
   .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
-// 🟢 User Schema Updated with Room History
+// 🟢 User Schema Updated with Room History, isSaved flag and Files array
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -42,6 +42,15 @@ const userSchema = new mongoose.Schema({
       name: String,
       color: String,
       lastAccessed: { type: Date, default: Date.now },
+      isSaved: { type: Boolean, default: false },
+      files: [
+        {
+          id: String,
+          name: String,
+          language: String,
+          content: String,
+        },
+      ],
     },
   ],
 });
@@ -143,7 +152,7 @@ const authenticateToken = (req, res, next) => {
 // 🟢 Save/Update Room in History
 app.post("/api/rooms/save", authenticateToken, async (req, res) => {
   try {
-    const { roomId, name, color } = req.body;
+    const { roomId, name, color, files, isSaved } = req.body;
     const userId = req.user.id;
 
     const user = await User.findById(userId);
@@ -152,9 +161,28 @@ app.post("/api/rooms/save", authenticateToken, async (req, res) => {
     const existingRoomIndex = user.rooms.findIndex((r) => r.roomId === roomId);
     if (existingRoomIndex !== -1) {
       user.rooms[existingRoomIndex].lastAccessed = Date.now();
+
+      // Forcefully update files
+      if (files && files.length > 0) {
+        user.rooms[existingRoomIndex].files = files;
+      }
+
+      // 🟢 STRICT CHECK: Jab Save dabaya jaye tabhi true set ho
+      if (isSaved === true) {
+        user.rooms[existingRoomIndex].isSaved = true;
+      }
     } else {
-      user.rooms.push({ roomId, name, color: color || "#3b82f6" });
+      user.rooms.push({
+        roomId,
+        name: name || "Collab Room",
+        color: color || "#3b82f6",
+        files: files || [],
+        isSaved: isSaved === true ? true : false,
+      });
     }
+
+    // 🔴 BRAHMASTRA: Iske bina Mongoose nested array save nahi karega
+    user.markModified("rooms");
 
     await user.save();
     res.status(200).json({ message: "Room saved", rooms: user.rooms });
@@ -171,7 +199,10 @@ app.get("/api/rooms/history", authenticateToken, async (req, res) => {
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ error: "User not found" });
 
-    const sortedRooms = user.rooms.sort(
+    // 🟢 STRICT CHECK: Sirf unhi rooms ko filter karega jo actively save kiye gaye the
+    const savedRooms = user.rooms.filter((r) => r.isSaved === true);
+
+    const sortedRooms = savedRooms.sort(
       (a, b) => b.lastAccessed - a.lastAccessed,
     );
     res.status(200).json({ rooms: sortedRooms });
@@ -191,6 +222,10 @@ app.delete("/api/rooms/:roomId", authenticateToken, async (req, res) => {
     if (!user) return res.status(404).json({ error: "User not found" });
 
     user.rooms = user.rooms.filter((r) => r.roomId !== roomId);
+
+    // Yahan bhi zarurat pad sakti hai agar array length badal rahi ho
+    user.markModified("rooms");
+
     await user.save();
 
     res.status(200).json({ message: "Room deleted", rooms: user.rooms });
@@ -205,7 +240,7 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 
-// --- 👇 SOCKETS CODE 👇 ---
+// --- 👇 SOCKETS CODE (Untouched) 👇 ---
 const userSocketMap = {};
 function getAllConnectedClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(

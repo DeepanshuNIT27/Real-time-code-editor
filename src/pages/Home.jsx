@@ -15,7 +15,6 @@ const Home = () => {
   const [historyRooms, setHistoryRooms] = useState([]);
   const [activeTab, setActiveTab] = useState("home");
 
-  // 👇 Yahan hum API_BASE_URL define kar rahe hain taaki sab jagah use ho sake
   const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
   const fetchHistory = async () => {
@@ -23,7 +22,6 @@ const Home = () => {
     if (!token) return;
 
     try {
-      // 👇 Localhost hataya
       const res = await fetch(`${API_BASE_URL}/api/rooms/history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -52,34 +50,19 @@ const Home = () => {
     const id = uuidv4();
     setRoomId(id);
 
-    const randomColor = ["#10b981", "#8b5cf6", "#f59e0b", "#3b82f6"][
-      Math.floor(Math.random() * 4)
-    ];
-    const token = localStorage.getItem("token");
+    // 🟢 MAHA BADLAV: Yahan se API Save wala code hata diya gaya hai.
+    // Ab room DB me save nahi hoga jab tak Editor me Save button na dabaya jaye.
 
-    if (token) {
-      try {
-        // 👇 Undefined 'endpoint' variable hataya aur direct route daala
-        await fetch(`${API_BASE_URL}/api/rooms/save`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            roomId: id,
-            name: finalRoomName,
-            color: randomColor,
-          }),
-        });
+    toast.success(`Created room: ${finalRoomName}. Joining now!`);
 
-        await fetchHistory();
-        toast.success(`Created room: ${finalRoomName}. You can now join!`);
-      } catch (err) {
-        console.error("Error saving room:", err);
-        toast.error("Failed to save room in history");
-      }
-    }
+    // 🟢 CHANGE 1: Create karte hi sidha join karwao aur roomName sath bhejo
+    navigate(`/editor/${id}`, {
+      state: {
+        username: username.trim(),
+        roomName: finalRoomName,
+      },
+    });
+
     setRoomName("");
   };
 
@@ -92,30 +75,16 @@ const Home = () => {
       return;
     }
 
-    const token = localStorage.getItem("token");
-    if (token) {
-      try {
-        // 👇 Localhost hataya
-        await fetch(`${API_BASE_URL}/api/rooms/save`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            roomId: safeRoomId,
-            name: "Joined Workspace",
-            color: "#3b82f6",
-          }),
-        });
-      } catch (err) {
-        console.error("Error saving join history:", err);
-      }
-    }
+    // 🟢 MAHA BADLAV: Yahan se bhi API Save wala code hata diya gaya hai.
+    // Sidha navigate karega bina save kiye.
+
+    const existingRoom = historyRooms.find((r) => r.roomId === safeRoomId);
 
     navigate(`/editor/${safeRoomId}`, {
       state: {
         username: safeUsername,
+        files: existingRoom?.files,
+        roomName: existingRoom?.name || "Collab Room", // 🟢 CHANGE 2: Purana naam Editor ko bhejo
       },
     });
   };
@@ -133,19 +102,23 @@ const Home = () => {
     navigate("/");
   };
 
-  const joinFromHistory = (historyRoomId) => {
+  const joinFromHistory = (room) => {
     if (!username.trim()) {
       toast.error("Please enter a username first to join");
       return;
     }
-    navigate(`/editor/${historyRoomId}`, {
-      state: { username: username.trim() },
+    navigate(`/editor/${room.roomId}`, {
+      state: {
+        username: username.trim(),
+        files: room.files,
+        roomName: room.name, // 🟢 CHANGE 3: History se jate waqt room ka naam bhejo
+      },
     });
   };
 
   return (
     <div className="dash-container">
-      {/* 🟢 LEFT SIDEBAR (Ab Clickable Hai) */}
+      {/* LEFT SIDEBAR */}
       <aside className="dash-sidebar">
         <div className="dash-brand">
           <img src="/code-sync.png" alt="logo" className="dash-logo" />
@@ -187,10 +160,8 @@ const Home = () => {
 
       {/* RIGHT MAIN CONTENT */}
       <main className="dash-main">
-        {/* 🟢 TABS LOGIC: Agar "home" hai toh dashboard dikhao, warna "myRooms" dikhao */}
         {activeTab === "home" ? (
           <>
-            {/* HEADER */}
             <header className="dash-header">
               <div>
                 <h1>Welcome back, {username || "Developer"}! 👋</h1>
@@ -204,11 +175,9 @@ const Home = () => {
               </div>
             </header>
 
-            {/* PREVIOUS ROOMS GRID (Top 4) */}
             <section className="dash-section">
               <div className="dash-section-title">
                 <h3>Your Recent Rooms</h3>
-                {/* 🟢 NAYA: View All pe click karne se "myRooms" tab khul jayega */}
                 <span
                   className="dash-view-all"
                   onClick={() => setActiveTab("myRooms")}
@@ -226,7 +195,7 @@ const Home = () => {
                     <div
                       className="dash-room-card"
                       key={room._id || room.roomId}
-                      onClick={() => joinFromHistory(room.roomId)}
+                      onClick={() => joinFromHistory(room)}
                     >
                       <div
                         className="dash-room-icon"
@@ -256,7 +225,6 @@ const Home = () => {
               </div>
             </section>
 
-            {/* ACTION CARDS */}
             <section className="dash-action-container">
               {/* CREATE CARD */}
               <div className="dash-action-card">
@@ -321,7 +289,6 @@ const Home = () => {
             </section>
           </>
         ) : (
-          // 🟢 YAHAN SE "MY ROOMS" WALA PAGE SHURU HOTA HAI
           <>
             <header className="dash-header">
               <div>
@@ -342,12 +309,11 @@ const Home = () => {
                     You haven't joined or created any rooms yet.
                   </p>
                 ) : (
-                  // Yahan saare rooms dikhenge (bina slice kiye)
                   historyRooms.map((room) => (
                     <div
                       className="dash-room-card"
                       key={room._id || room.roomId}
-                      onClick={() => joinFromHistory(room.roomId)}
+                      onClick={() => joinFromHistory(room)}
                     >
                       <div
                         className="dash-room-icon"
@@ -380,7 +346,6 @@ const Home = () => {
           </>
         )}
 
-        {/* FOOTER */}
         <footer className="dash-footer">
           Built with ❤️ by{" "}
           <a href="https://github.com/DeepanshuNIT27">Deepanshu Sahu</a>

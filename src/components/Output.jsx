@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
-const Output = ({ getCode, languageId }) => {
+const Output = ({ getCode, languageId, onSave }) => {
+  // 🟢 CHANGE 1: onSave prop add kiya
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -159,7 +160,9 @@ const Output = ({ getCode, languageId }) => {
           )}
         </button>
         {/* Save button placeholder matching target UI */}
-        <button className="saveCodeBtn">
+        <button className="saveCodeBtn" onClick={onSave}>
+          {" "}
+          {/* 🟢 CHANGE 2: onClick={onSave} laga diya */}
           <svg
             width="14"
             height="14"

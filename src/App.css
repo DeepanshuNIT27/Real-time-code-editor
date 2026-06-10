@@ -1065,6 +1065,29 @@
   box-shadow: 0 0 10px rgba(34, 197, 94, 0.6) !important;
 }
 
+/* 🟢 YEH FIX VIDEO ZOOM ISSUE KE LIYE HAI 🟢 */
+
+.streamParticipantCard video,
+.str-video__video {
+  object-fit: contain !important;  
+  width: 100% !important;
+  height: 100% !important;
+  background-color: #151b2b; /* Card ke background se match karne ke liye */
+}
+
+/* Screen share card ke andar video ko fix karne ke liye */
+.streamScreenShareCard video {
+  object-fit: contain !important;
+  width: 100% !important;
+  height: 100% !important;
+  background-color: #151b2b;
+}
+
+/* Local camera ko mirror (ulta) dikhane se rokne ke liye (Optional, but recommended) */
+.streamParticipantCard video {
+  transform: scaleX(-1);
+}
+
 .videoPlaceholder {
   display: flex;
   align-items: center;
