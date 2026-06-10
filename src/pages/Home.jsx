@@ -13,16 +13,18 @@ const Home = () => {
   );
 
   const [historyRooms, setHistoryRooms] = useState([]);
-
-  // 🟢 NAYA FIX: Tab switch karne ke liye state (home ya myRooms)
   const [activeTab, setActiveTab] = useState("home");
+
+  // 👇 Yahan hum API_BASE_URL define kar rahe hain taaki sab jagah use ho sake
+  const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
   const fetchHistory = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
     try {
-      const res = await fetch("http://localhost:5000/api/rooms/history", {
+      // 👇 Localhost hataya
+      const res = await fetch(`${API_BASE_URL}/api/rooms/history`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -57,7 +59,8 @@ const Home = () => {
 
     if (token) {
       try {
-        await fetch("http://localhost:5000/api/rooms/save", {
+        // 👇 Undefined 'endpoint' variable hataya aur direct route daala
+        await fetch(`${API_BASE_URL}/api/rooms/save`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -92,7 +95,8 @@ const Home = () => {
     const token = localStorage.getItem("token");
     if (token) {
       try {
-        await fetch("http://localhost:5000/api/rooms/save", {
+        // 👇 Localhost hataya
+        await fetch(`${API_BASE_URL}/api/rooms/save`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
