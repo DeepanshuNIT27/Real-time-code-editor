@@ -36,48 +36,10 @@ const extensionToLangMap = {
   rb: 72,
 };
 
-const defaultFiles = [{ id: "1", name: "main.cpp", content: "" }];
-
-const getWorkspaceStorageKey = (roomId) => `workspace-${roomId}`;
-
-const loadStoredWorkspace = (roomId) => {
-  try {
-    const stored = localStorage.getItem(getWorkspaceStorageKey(roomId));
-    if (!stored) return { files: defaultFiles, activeFileId: "1" };
-
-    const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed.files) || parsed.files.length === 0) {
-      return { files: defaultFiles, activeFileId: "1" };
-    }
-
-    const activeFileId = parsed.files.some((f) => f.id === parsed.activeFileId)
-      ? parsed.activeFileId
-      : parsed.files[0].id;
-
-    return { files: parsed.files, activeFileId };
-  } catch (error) {
-    console.error("Failed to load stored workspace:", error);
-    return { files: defaultFiles, activeFileId: "1" };
-  }
-};
-
-const saveStoredWorkspace = (roomId, files, activeFileId) => {
-  try {
-    localStorage.setItem(
-      getWorkspaceStorageKey(roomId),
-      JSON.stringify({ files, activeFileId }),
-    );
-  } catch (error) {
-    console.error("Failed to save workspace:", error);
-  }
-};
-
-// NAYA COMPONENT: Dusre (remote) users ki screen share ko editor ki jagah badi dikhane ke liye
 const RemoteScreenShareViewer = ({ children }) => {
   const { useParticipants } = useCallStateHooks();
   const participants = useParticipants();
 
-  // Render as soon as the screen-share track is published so Stream can subscribe to it.
   const remoteSharer = participants.find(
     (p) =>
       !p.isLocalParticipant &&
@@ -86,33 +48,8 @@ const RemoteScreenShareViewer = ({ children }) => {
 
   if (remoteSharer) {
     return (
-      <div
-        style={{
-          flex: 1,
-          width: "100%",
-          height: "100%",
-          backgroundColor: "#000",
-          position: "relative",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {/* Name Badge on top of screen share */}
-        <div
-          style={{
-            position: "absolute",
-            top: 12,
-            left: 16,
-            zIndex: 50,
-            backgroundColor: "#3b82f6",
-            padding: "6px 12px",
-            borderRadius: "6px",
-            color: "white",
-            fontSize: "13px",
-            fontWeight: "bold",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
-          }}
-        >
+      <div className="remoteScreenShareOverlay">
+        <div className="remoteShareBadge">
           Viewing {remoteSharer.name || "Remote User"}'s Screen
         </div>
         <ParticipantView
@@ -125,12 +62,9 @@ const RemoteScreenShareViewer = ({ children }) => {
       </div>
     );
   }
-
-  // Agar kisi remote user ne screen share nahi ki hai (ya tum khud kar rahe ho), toh normal Editor dikhao
   return children;
 };
 
-// FIX 1: Parent component context lifting shell setup
 const EditorPage = () => {
   const location = useLocation();
   const { roomId } = useParams();
@@ -140,14 +74,15 @@ const EditorPage = () => {
   return <EditorPageContent roomId={roomId} locationState={location.state} />;
 };
 
-// Internal Collaborative Workspace Container System
 const EditorPageContent = ({ roomId, locationState }) => {
   const socketRef = useRef(null);
-  const initialWorkspaceRef = useRef(loadStoredWorkspace(roomId));
-  const initialActiveFile = initialWorkspaceRef.current.files.find(
-    (file) => file.id === initialWorkspaceRef.current.activeFileId,
+
+  const codeRef = useRef(
+    locationState?.files && locationState.files.length > 0
+      ? locationState.files[0].content
+      : "",
   );
-  const codeRef = useRef(initialActiveFile?.content || "");
+
   const reactNavigator = useNavigate();
 
   const [clients, setClients] = useState([]);
@@ -155,12 +90,18 @@ const EditorPageContent = ({ roomId, locationState }) => {
   const [activeLeftPanel, setActiveLeftPanel] = useState("editor");
   const [currentSocketId, setCurrentSocketId] = useState(null);
 
-  const [files, setFiles] = useState(initialWorkspaceRef.current.files);
-  const [activeFileId, setActiveFileId] = useState(
-    initialWorkspaceRef.current.activeFileId,
+  const [files, setFiles] = useState(
+    locationState?.files && locationState.files.length > 0
+      ? locationState.files
+      : [{ id: "1", name: "main.cpp", content: "" }],
   );
 
-  //  MASTER FIX 1: Socket ke andar fresh state access karne ke liye refs lagaye (Stale Closure fix)
+  const [activeFileId, setActiveFileId] = useState(
+    locationState?.files && locationState.files.length > 0
+      ? locationState.files[0].id
+      : "1",
+  );
+
   const filesRef = useRef(files);
   const activeFileIdRef = useRef(activeFileId);
 
@@ -173,11 +114,13 @@ const EditorPageContent = ({ roomId, locationState }) => {
   }, [activeFileId]);
 
   useEffect(() => {
-    saveStoredWorkspace(roomId, files, activeFileId);
-  }, [roomId, files, activeFileId]);
-
-  useEffect(() => {
     let isMounted = true;
+
+    // Handlers define kiye taaki cleanup me aasani ho
+    const handleConnectError = (err) => {
+      toast.error("Socket connection failed, try again later.");
+      reactNavigator("/");
+    };
 
     const init = async () => {
       const socket = await initSocket();
@@ -193,13 +136,8 @@ const EditorPageContent = ({ roomId, locationState }) => {
         setCurrentSocketId(socketRef.current.id);
       }
 
-      function handleErrors(err) {
-        toast.error("Socket connection failed, try again later.");
-        reactNavigator("/");
-      }
-
-      socketRef.current.on("connect_error", handleErrors);
-      socketRef.current.on("connect_failed", handleErrors);
+      socketRef.current.on("connect_error", handleConnectError);
+      socketRef.current.on("connect_failed", handleConnectError);
 
       socketRef.current.emit(ACTIONS.JOIN, {
         roomId,
@@ -209,26 +147,40 @@ const EditorPageContent = ({ roomId, locationState }) => {
       socketRef.current.on(
         ACTIONS.JOINED,
         ({ clients, username, socketId }) => {
-          setClients([...clients]);
+          let uniqueClients = [];
+          setClients((prev) => {
+            uniqueClients = [...prev];
+            clients.forEach((newClient) => {
+              if (
+                !uniqueClients.some((c) => c.socketId === newClient.socketId)
+              ) {
+                uniqueClients.push(newClient);
+              }
+            });
+            return uniqueClients;
+          });
+
           if (username !== locationState?.username) {
             toast.success(`${username} joined the room.`);
           }
 
-          // MASTER FIX 2: Naya user aane par sirf ek line nahi, POORA file system sync karo
-          const currentCode = codeRef.current || "";
-          const currentActiveId = activeFileIdRef.current;
-          const updatedWorkspace = filesRef.current.map((f) =>
-            f.id === currentActiveId ? { ...f, content: currentCode } : f,
-          );
+          // 🌟 PRODUCTION FIX 1: Leader/Host Election
+          // Check if current user is the "oldest" member in the room (the leader)
+          // We use clients list from the server to determine the leader.
+          const isLeader =
+            clients.length > 0 && clients[0].socketId === socketRef.current.id;
 
-          // Local memory me bhi save rakho
-          setFiles(updatedWorkspace);
+          // Sirf "Leader" hi naye user ko data bhejega. Multi-sync race condition KHATAM!
+          if (socketId !== socketRef.current.id && isLeader) {
+            const currentCode = codeRef.current || "";
+            const currentActiveId = activeFileIdRef.current;
+            const updatedWorkspace = filesRef.current.map((f) =>
+              f.id === currentActiveId ? { ...f, content: currentCode } : f,
+            );
 
-          // Naye user ko poori files array aur current active file bhejo
-          if (socketId !== socketRef.current.id) {
             socketRef.current.emit(ACTIONS.SYNC_CODE, {
               socketId,
-              code: currentCode, // Backward compatibility for older connections
+              code: currentCode,
               files: updatedWorkspace,
               activeFileId: currentActiveId,
             });
@@ -244,6 +196,8 @@ const EditorPageContent = ({ roomId, locationState }) => {
           files: incomingFiles,
           activeFileId: incomingActiveFileId,
         }) => {
+          // 🌟 PRODUCTION FIX 2: Strict check to avoid accidental overwrites
+          // Ye tabhi chalega jab poora workspace initialize karna ho
           if (
             incomingFiles &&
             Array.isArray(incomingFiles) &&
@@ -258,10 +212,10 @@ const EditorPageContent = ({ roomId, locationState }) => {
             codeRef.current = activeFileData
               ? activeFileData.content
               : code || "";
-            saveStoredWorkspace(roomId, incomingFiles, incomingActiveFileId);
             return;
           }
 
+          // Regular single file typing update
           if (fileId) {
             setFiles((prev) =>
               prev.map((f) => (f.id === fileId ? { ...f, content: code } : f)),
@@ -288,7 +242,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
         setFiles((prev) => prev.filter((f) => f.id !== fileId));
       });
 
-      //  MASTER FIX 3: Remote user jab file switch kare, toh apni current mehnat bhi save karo
       socketRef.current.on("file_switch", ({ fileId }) => {
         const currentCode = codeRef.current || "";
         const oldActiveId = activeFileIdRef.current;
@@ -301,7 +254,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
 
         setActiveFileId(fileId);
 
-        // Incoming file ka content load karo taaki pichla text na dikhe
         const incomingFile = filesRef.current.find((f) => f.id === fileId);
         codeRef.current = incomingFile?.content || "";
       });
@@ -315,14 +267,19 @@ const EditorPageContent = ({ roomId, locationState }) => {
 
     return () => {
       isMounted = false;
-      socketRef.current?.disconnect();
-      socketRef.current?.off(ACTIONS.JOINED);
-      socketRef.current?.off(ACTIONS.DISCONNECTED);
-      socketRef.current?.off("file_create");
-      socketRef.current?.off("file_delete");
-      socketRef.current?.off("file_switch");
-      socketRef.current?.off("panel_switch");
-      socketRef.current?.off(ACTIONS.CODE_CHANGE);
+      // 🌟 PRODUCTION FIX 3: Complete Memory Leak Cleanup
+      if (socketRef.current) {
+        socketRef.current.off("connect_error");
+        socketRef.current.off("connect_failed");
+        socketRef.current.off(ACTIONS.JOINED);
+        socketRef.current.off(ACTIONS.DISCONNECTED);
+        socketRef.current.off("file_create");
+        socketRef.current.off("file_delete");
+        socketRef.current.off("file_switch");
+        socketRef.current.off("panel_switch");
+        socketRef.current.off(ACTIONS.CODE_CHANGE);
+        socketRef.current.disconnect();
+      }
     };
   }, [roomId, locationState?.username, reactNavigator]);
 
@@ -347,9 +304,46 @@ const EditorPageContent = ({ roomId, locationState }) => {
 
   function leaveRoom() {
     localStorage.removeItem(`code-${roomId}`);
-    localStorage.removeItem(getWorkspaceStorageKey(roomId));
     reactNavigator("/");
   }
+
+  const handleSaveRoom = async () => {
+    try {
+      const currentCode = codeRef.current || "";
+      const updatedFilesForDB = filesRef.current.map((f) =>
+        f.id === activeFileIdRef.current ? { ...f, content: currentCode } : f,
+      );
+
+      const token = localStorage.getItem("token");
+      const backendUrl =
+        import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+
+      const response = await fetch(`${backendUrl}/api/rooms/save`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          roomId,
+          name: locationState?.roomName || "Collab Room",
+          isSaved: true,
+          files: updatedFilesForDB,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success("Files saved successfully!");
+      } else {
+        const errorData = await response.json();
+        console.error("Save Error:", errorData);
+        toast.error(errorData.error || "Failed to save files.");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("An error occurred while saving.");
+    }
+  };
 
   return (
     <VideoCallProvider
@@ -357,22 +351,14 @@ const EditorPageContent = ({ roomId, locationState }) => {
       userName={locationState?.username}
       roomId={roomId}
     >
-      <div
-        className="appShell"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100vh",
-          overflow: "hidden",
-        }}
-      >
-        {/*  TOP BAR */}
-        <header className="topBar" style={{ flexShrink: 0 }}>
+      <div className="appShell">
+        {/* TOP BAR */}
+        <header className="topBar">
           <div className="topBarLeft">
-            <img className="topLogo" src="/code-sync.png" alt="logo" />
+            <img className="topLogo" src="/code-sync.png" alt="CodeSync Logo" />
             <div className="roomInfo">
               <span className="roomName">
-                Room: {locationState?.username}'s Room
+                Room: {locationState?.roomName || "Collab Room"}
               </span>
               <span className="onlineBadge">● Online ({clients.length})</span>
             </div>
@@ -418,31 +404,15 @@ const EditorPageContent = ({ roomId, locationState }) => {
         </header>
 
         {/* CENTER WORKSPACE SYSTEM AREA */}
-        <div
-          className="mainContent"
-          style={{ flex: 1, overflow: "hidden", display: "flex" }}
-        >
-          <div
-            className="leftPanelContainer"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              flex: 1,
-              height: "100%",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              className="upperWorkspace"
-              style={{ display: "flex", flex: 1, overflow: "hidden" }}
-            >
+        <div className="mainContent">
+          <div className="leftPanelContainer">
+            <div className="upperWorkspace">
               <FilePanel
                 files={files}
                 activeFileId={activeFileId}
                 onFileSelect={(fileId) => {
                   if (fileId === activeFileId) return;
 
-                  //  MASTER FIX 4: Doosri file pe jane se pehle current editor ka code save karo aur reference update karo
                   const currentMemoryCode = codeRef.current || "";
                   setFiles((prev) =>
                     prev.map((f) =>
@@ -459,7 +429,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   socketRef.current.emit("file_switch", { roomId, fileId });
                 }}
                 onFileCreate={(name) => {
-                  // MASTER FIX 5: Nayi file banane par purana code save karo, phir nayi blank file me jao
                   const currentMemoryCode = codeRef.current || "";
                   const newFile = {
                     id: Date.now().toString(),
@@ -476,7 +445,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                     return [...updated, newFile];
                   });
 
-                  codeRef.current = ""; // Nayi file ekdum blank honi chahiye
+                  codeRef.current = ""; // Nayi file ekdum blank
                   setActiveFileId(newFile.id);
 
                   socketRef.current.emit("file_create", {
@@ -495,25 +464,12 @@ const EditorPageContent = ({ roomId, locationState }) => {
                 }}
               />
 
-              <div
-                className="editorWorkspace"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  flex: 1,
-                  backgroundColor: "#1e1e24",
-                  position: "relative",
-                  minHeight: 0,
-                }}
-              >
+              <div className="editorWorkspace">
                 <RemoteScreenShareViewer>
                   <div
                     className="editorArea"
                     style={{
-                      flex: 1,
-                      overflow: "auto",
                       display: activeLeftPanel === "editor" ? "block" : "none",
-                      height: "100%",
                     }}
                   >
                     {socketRef.current && (
@@ -527,13 +483,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
                         }
                         onCodeChange={(code) => {
                           codeRef.current = code;
-                          setFiles((prev) =>
-                            prev.map((f) =>
-                              f.id === activeFileId
-                                ? { ...f, content: code }
-                                : f,
-                            ),
-                          );
                         }}
                       />
                     )}
@@ -542,13 +491,8 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   <div
                     className="whiteboardArea"
                     style={{
-                      flex: 1,
-                      overflow: "hidden",
                       display:
                         activeLeftPanel === "whiteboard" ? "block" : "none",
-                      height: "100%",
-                      minHeight: 0,
-                      position: "relative",
                     }}
                   >
                     <Whiteboard socketRef={socketRef} roomId={roomId} />
@@ -557,17 +501,11 @@ const EditorPageContent = ({ roomId, locationState }) => {
               </div>
             </div>
 
-            <div
-              className="outputSectionWrapper"
-              style={{
-                height: "180px",
-                borderTop: "1px solid #2d2d34",
-                flexShrink: 0,
-              }}
-            >
+            <div className="outputSectionWrapper">
               <Output
                 getCode={() => codeRef.current}
                 languageId={getCurrentLanguageId}
+                onSave={handleSaveRoom}
               />
             </div>
           </div>
@@ -588,10 +526,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
               </button>
             </div>
 
-            <div
-              className="rightTabContent"
-              style={{ flex: 1, overflow: "hidden" }}
-            >
+            <div className="rightTabContent">
               <div
                 style={{
                   display: activeRightTab === "chat" ? "block" : "none",
@@ -604,7 +539,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   username={locationState?.username}
                 />
               </div>
-
               <div
                 style={{
                   display: activeRightTab === "ai" ? "block" : "none",
@@ -617,20 +551,11 @@ const EditorPageContent = ({ roomId, locationState }) => {
           </div>
         </div>
 
-        <div
-          className="bottomBar"
-          style={{
-            height: "110px",
-            padding: "0",
-            flexShrink: 0,
-            overflow: "hidden",
-            backgroundColor: "#14141b",
-          }}
-        >
+        <div className="bottomBar">
           {currentSocketId ? (
             <VideoContainer />
           ) : (
-            <div className="flex items-center justify-center w-full h-full text-gray-400 text-sm">
+            <div className="bottomLoader">
               Connecting and verifying hardware sync signals...
             </div>
           )}
