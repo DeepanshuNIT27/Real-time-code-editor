@@ -36,6 +36,7 @@ const extensionToLangMap = {
   rb: 72,
 };
 
+// 🌟 FIX: UX Upgrade - Screen Share poori left space occupy karega clean layout ke sath
 const RemoteScreenShareViewer = ({ children }) => {
   const { useParticipants } = useCallStateHooks();
   const participants = useParticipants();
@@ -48,21 +49,53 @@ const RemoteScreenShareViewer = ({ children }) => {
 
   if (remoteSharer) {
     return (
-      <div className="remoteScreenShareOverlay">
-        <div className="remoteShareBadge">
-          Viewing {remoteSharer.name || "Remote User"}'s Screen
+      <div
+        className="remoteScreenShareOverlay"
+        style={{
+          flex: 1, // Take full height/width of leftPanelContainer
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          width: "100%",
+          backgroundColor: "#0f172a", // Dark theme background
+          borderRadius: "8px",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          className="remoteShareBadge"
+          style={{
+            backgroundColor: "#3b82f6",
+            color: "white",
+            padding: "8px 16px",
+            fontWeight: "600",
+            textAlign: "center",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+            zIndex: 10,
+          }}
+        >
+          📺 Viewing {remoteSharer.name || "Remote User"}'s Screen
         </div>
-        <ParticipantView
-          participant={remoteSharer}
-          trackType="screenShareTrack"
-          muteAudio={true}
-          className="remoteScreenShareParticipant"
-          ParticipantViewUI={null}
-        />
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <ParticipantView
+            participant={remoteSharer}
+            trackType="screenShareTrack"
+            muteAudio={true}
+            className="remoteScreenShareParticipant"
+            ParticipantViewUI={null}
+          />
+        </div>
       </div>
     );
   }
-  return children;
+  return <>{children}</>;
 };
 
 const EditorPage = () => {
@@ -106,7 +139,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
   const activeFileIdRef = useRef(activeFileId);
   const isWorkspaceSynced = useRef(false);
 
-  // 🌟 FIX: Page reload hone par unsaved changes udne se bachane ke liye warning
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       e.preventDefault();
@@ -413,66 +445,66 @@ const EditorPageContent = ({ roomId, locationState }) => {
         {/* CENTER WORKSPACE SYSTEM AREA */}
         <div className="mainContent">
           <div className="leftPanelContainer">
-            <div className="upperWorkspace">
-              <FilePanel
-                files={files}
-                activeFileId={activeFileId}
-                onFileSelect={(fileId) => {
-                  if (fileId === activeFileId) return;
+            <RemoteScreenShareViewer>
+              <div className="upperWorkspace">
+                <FilePanel
+                  files={files}
+                  activeFileId={activeFileId}
+                  onFileSelect={(fileId) => {
+                    if (fileId === activeFileId) return;
 
-                  const currentMemoryCode = codeRef.current || "";
-                  setFiles((prev) =>
-                    prev.map((f) =>
-                      f.id === activeFileId
-                        ? { ...f, content: currentMemoryCode }
-                        : f,
-                    ),
-                  );
-
-                  const incomingFile = files.find((f) => f.id === fileId);
-                  codeRef.current = incomingFile?.content || "";
-
-                  setActiveFileId(fileId);
-                  socketRef.current.emit("file_switch", { roomId, fileId });
-                }}
-                onFileCreate={(name) => {
-                  const currentMemoryCode = codeRef.current || "";
-                  const newFile = {
-                    id: Date.now().toString(),
-                    name,
-                    content: "",
-                  };
-
-                  setFiles((prev) => {
-                    const updated = prev.map((f) =>
-                      f.id === activeFileId
-                        ? { ...f, content: currentMemoryCode }
-                        : f,
+                    const currentMemoryCode = codeRef.current || "";
+                    setFiles((prev) =>
+                      prev.map((f) =>
+                        f.id === activeFileId
+                          ? { ...f, content: currentMemoryCode }
+                          : f,
+                      ),
                     );
-                    return [...updated, newFile];
-                  });
 
-                  codeRef.current = "";
-                  setActiveFileId(newFile.id);
+                    const incomingFile = files.find((f) => f.id === fileId);
+                    codeRef.current = incomingFile?.content || "";
 
-                  socketRef.current.emit("file_create", {
-                    roomId,
-                    file: newFile,
-                  });
-                  socketRef.current.emit("file_switch", {
-                    roomId,
-                    fileId: newFile.id,
-                  });
-                }}
-                onFileDelete={(fileId) => {
-                  if (files.length === 1) return;
-                  setFiles((prev) => prev.filter((f) => f.id !== fileId));
-                  socketRef.current.emit("file_delete", { roomId, fileId });
-                }}
-              />
+                    setActiveFileId(fileId);
+                    socketRef.current.emit("file_switch", { roomId, fileId });
+                  }}
+                  onFileCreate={(name) => {
+                    const currentMemoryCode = codeRef.current || "";
+                    const newFile = {
+                      id: Date.now().toString(),
+                      name,
+                      content: "",
+                    };
 
-              <div className="editorWorkspace">
-                <RemoteScreenShareViewer>
+                    setFiles((prev) => {
+                      const updated = prev.map((f) =>
+                        f.id === activeFileId
+                          ? { ...f, content: currentMemoryCode }
+                          : f,
+                      );
+                      return [...updated, newFile];
+                    });
+
+                    codeRef.current = "";
+                    setActiveFileId(newFile.id);
+
+                    socketRef.current.emit("file_create", {
+                      roomId,
+                      file: newFile,
+                    });
+                    socketRef.current.emit("file_switch", {
+                      roomId,
+                      fileId: newFile.id,
+                    });
+                  }}
+                  onFileDelete={(fileId) => {
+                    if (files.length === 1) return;
+                    setFiles((prev) => prev.filter((f) => f.id !== fileId));
+                    socketRef.current.emit("file_delete", { roomId, fileId });
+                  }}
+                />
+
+                <div className="editorWorkspace">
                   <div
                     className="editorArea"
                     style={{
@@ -504,17 +536,17 @@ const EditorPageContent = ({ roomId, locationState }) => {
                   >
                     <Whiteboard socketRef={socketRef} roomId={roomId} />
                   </div>
-                </RemoteScreenShareViewer>
+                </div>
               </div>
-            </div>
 
-            <div className="outputSectionWrapper">
-              <Output
-                getCode={() => codeRef.current}
-                languageId={getCurrentLanguageId}
-                onSave={handleSaveRoom}
-              />
-            </div>
+              <div className="outputSectionWrapper">
+                <Output
+                  getCode={() => codeRef.current}
+                  languageId={getCurrentLanguageId}
+                  onSave={handleSaveRoom}
+                />
+              </div>
+            </RemoteScreenShareViewer>
           </div>
 
           <div className="rightPanel">
