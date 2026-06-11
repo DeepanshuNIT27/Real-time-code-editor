@@ -23,12 +23,12 @@
     "firebase": "^12.14.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.3",
-    "nodemailer": "^8.0.11",
     "react": "^19.2.5",
     "react-avatar": "^5.0.4",
     "react-dom": "^19.2.5",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.15.0",
+    "resend": "^6.12.4",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "uuid": "^14.0.0"

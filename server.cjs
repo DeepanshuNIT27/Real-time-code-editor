@@ -12,7 +12,7 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const nodemailer = require("nodemailer"); // 🟢 ADDED: Nodemailer import
+const { Resend } = require("resend"); // 🟢 CHANGED: Nodemailer ki jagah Resend import kiya
 
 const server = http.createServer(app);
 
@@ -37,8 +37,8 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  resetOTP: { type: String, default: null }, // 🟢 NEW: Password reset OTP store karne ke liye
-  resetOTPExpires: { type: Date, default: null }, // 🟢 NEW: OTP expiry time ke liye
+  resetOTP: { type: String, default: null },
+  resetOTPExpires: { type: Date, default: null },
   rooms: [
     {
       roomId: String,
@@ -70,40 +70,42 @@ const tempUserSchema = new mongoose.Schema({
 const TempUser = mongoose.model("TempUser", tempUserSchema);
 
 // ==========================================
-// 🟢 Nodemailer Transporter & OTP Function
+// 🟢 Resend Email Client & OTP Function (CHANGED)
 // ==========================================
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendOTPWithEmail = async (userEmail, otp, type) => {
   let subject = "";
-  let messageText = "";
+  let htmlContent = ""; // Resend me HTML emails bhejna easy hai
 
   if (type === "signup") {
     subject = "Verify your CodeSync Account";
-    messageText = `Welcome to CodeSync! Your verification OTP is: ${otp}. This OTP is valid for 10 minutes.`;
+    htmlContent = `<div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2>Welcome to CodeSync! 🚀</h2>
+                    <p>Your verification OTP is: <strong><span style="font-size: 24px; color: #3b82f6;">${otp}</span></strong></p>
+                    <p>This OTP is valid for 10 minutes.</p>
+                   </div>`;
   } else if (type === "forgot") {
     subject = "Reset your CodeSync Password";
-    messageText = `You requested a password reset. Your OTP is: ${otp}. Do not share this OTP with anyone.`;
+    htmlContent = `<div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2>Password Reset Request 🔒</h2>
+                    <p>Your OTP to reset your password is: <strong><span style="font-size: 24px; color: #ef4444;">${otp}</span></strong></p>
+                    <p>Do not share this OTP with anyone.</p>
+                   </div>`;
   }
 
-  const mailOptions = {
-    from: `"CodeSync Team" <${process.env.EMAIL_USER}>`,
-    to: userEmail,
-    subject: subject,
-    text: messageText,
-  };
-
   try {
-    await transporter.sendMail(mailOptions);
+    const data = await resend.emails.send({
+      from: "CodeSync Team <onboarding@resend.dev>", // ⚠️ Testing ke liye onboarding@resend.dev use karna zaroori hai
+      to: userEmail,
+      subject: subject,
+      html: htmlContent,
+    });
+
+    console.log("✅ Email sent via Resend:", data);
     return { success: true };
   } catch (error) {
-    console.error("Email send error:", error);
+    console.error("❌ Resend Email send error:", error);
     return { success: false, error };
   }
 };
