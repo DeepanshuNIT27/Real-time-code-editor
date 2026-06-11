@@ -157,7 +157,19 @@ const EditorPageContent = ({ roomId, locationState }) => {
       socketRef.current.on(
         ACTIONS.JOINED,
         ({ clients, username, socketId }) => {
-          setClients([...clients]);
+          // 🟢 DOUBLE NAME FIX: Ensure unique clients by socketId
+          setClients((prev) => {
+            const uniqueClients = [...prev];
+            clients.forEach((newClient) => {
+              if (
+                !uniqueClients.some((c) => c.socketId === newClient.socketId)
+              ) {
+                uniqueClients.push(newClient);
+              }
+            });
+            return uniqueClients;
+          });
+
           if (username !== locationState?.username) {
             toast.success(`${username} joined the room.`);
           }
@@ -230,7 +242,8 @@ const EditorPageContent = ({ roomId, locationState }) => {
       socketRef.current?.off("file_switch");
       socketRef.current?.off("panel_switch");
     };
-  }, [roomId, locationState?.username, reactNavigator]);
+    // 🟢 DOUBLE NAME FIX: reactNavigator ko dependency array se hata diya, taaki render pe reconnect na ho
+  }, [roomId, locationState?.username]);
 
   const getCurrentLanguageId = () => {
     const activeFile = files.find((f) => f.id === activeFileId);
