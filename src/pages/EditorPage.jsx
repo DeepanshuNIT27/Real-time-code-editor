@@ -194,6 +194,37 @@ const EditorPageContent = ({ roomId, locationState }) => {
         },
       );
 
+      // 🟢 MASTER FIX 6: Naya user jab data receive kare toh poori files list screen par load ho jaye
+      socketRef.current.on(
+        ACTIONS.CODE_CHANGE,
+        ({
+          fileId,
+          code,
+          files: incomingFiles,
+          activeFileId: incomingActiveFileId,
+        }) => {
+          // Agar doosre client se poori file list aayi hai (naye user ko initialize karne ke liye)
+          if (incomingFiles && incomingFiles.length > 0) {
+            setFiles(incomingFiles);
+            if (incomingActiveFileId) {
+              setActiveFileId(incomingActiveFileId);
+            }
+          }
+
+          // Single file code change ko update karne ka logic
+          if (fileId) {
+            setFiles((prev) =>
+              prev.map((f) => (f.id === fileId ? { ...f, content: code } : f)),
+            );
+            if (fileId === activeFileIdRef.current) {
+              codeRef.current = code;
+            }
+          } else {
+            codeRef.current = code;
+          }
+        },
+      );
+
       socketRef.current.on(ACTIONS.DISCONNECTED, ({ socketId, username }) => {
         toast.success(`${username} left the room.`);
         setClients((prev) => prev.filter((c) => c.socketId !== socketId));
@@ -241,6 +272,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
       socketRef.current?.off("file_delete");
       socketRef.current?.off("file_switch");
       socketRef.current?.off("panel_switch");
+      socketRef.current?.off(ACTIONS.CODE_CHANGE); // Ensure listener is cleaned up
     };
     // 🟢 DOUBLE NAME FIX: reactNavigator ko dependency array se hata diya, taaki render pe reconnect na ho
   }, [roomId, locationState?.username]);
