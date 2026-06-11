@@ -174,7 +174,7 @@ const Home = () => {
           id: toastId,
         });
         setCurrentPassword("");
-        newPassword("");
+       setNewPassword("");
       } else {
         toast.error(data.error || "Failed to update password", { id: toastId });
       }
