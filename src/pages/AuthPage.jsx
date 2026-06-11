@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 // 🟢 NEW: Firebase imports added here
-import { auth, googleProvider } from "./firebase";
+import { auth, googleProvider } from "../firebase";
 import { signInWithPopup } from "firebase/auth";
 
 const AuthPage = () => {

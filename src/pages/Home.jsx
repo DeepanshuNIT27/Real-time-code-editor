@@ -13,7 +13,11 @@ const Home = () => {
   );
 
   const [historyRooms, setHistoryRooms] = useState([]);
-  const [activeTab, setActiveTab] = useState("home");
+  const [activeTab, setActiveTab] = useState("home"); // "home" | "myRooms" | "settings"
+
+  // 🟢 Naye States Change Password form ke liye
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
 
   const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -140,6 +144,46 @@ const Home = () => {
     }
   };
 
+  // 🟢 Naya Function: Change Password Handle Karne ke liye
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+
+    if (!currentPassword || !newPassword) {
+      return toast.error("Please fill both password fields.");
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) return toast.error("User not authenticated.");
+
+    const toastId = toast.loading("Updating password...");
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success(data.message || "Password updated successfully!", {
+          id: toastId,
+        });
+        setCurrentPassword("");
+        newPassword("");
+      } else {
+        toast.error(data.error || "Failed to update password", { id: toastId });
+      }
+    } catch (error) {
+      console.error("Change password error:", error);
+      toast.error("Server error during update", { id: toastId });
+    }
+  };
+
   return (
     <div className="dash-container">
       {/* LEFT SIDEBAR */}
@@ -165,7 +209,13 @@ const Home = () => {
           >
             👥 My Rooms
           </button>
-          <button className="dash-nav-item">⚙️ Settings</button>
+          {/* 🟢 CHANGE: Settings button ab functional hai */}
+          <button
+            className={`dash-nav-item ${activeTab === "settings" ? "active" : ""}`}
+            onClick={() => setActiveTab("settings")}
+          >
+            ⚙️ Settings
+          </button>
         </nav>
 
         <div className="dash-profile">
@@ -183,7 +233,6 @@ const Home = () => {
       </aside>
 
       {/* RIGHT MAIN CONTENT */}
-      {/* 🟢 CHANGE: main container me Flexbox aur vh height check lagaya hai takqi footer push ho sake */}
       <main
         className="dash-main"
         style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
@@ -326,7 +375,7 @@ const Home = () => {
               </div>
             </section>
           </>
-        ) : (
+        ) : activeTab === "myRooms" ? (
           <>
             <header className="dash-header">
               <div>
@@ -421,9 +470,113 @@ const Home = () => {
               </div>
             </section>
           </>
+        ) : (
+          /* ======================================================== */
+          /* 🟢 NEW VIEW: Settings & Profile Information Tab            */
+          /* ======================================================== */
+          <>
+            <header className="dash-header">
+              <div>
+                <h1>Account Settings ⚙️</h1>
+                <p>Manage your profile and security preferences.</p>
+              </div>
+              <div className="dash-header-actions">
+                <button className="dash-logout-btn" onClick={handleLogout}>
+                  Logout 🚪
+                </button>
+              </div>
+            </header>
+
+            <section
+              className="dash-section"
+              style={{ display: "flex", gap: "30px", flexWrap: "wrap" }}
+            >
+              {/* Profile Card */}
+              <div
+                className="dash-action-card"
+                style={{ flex: "1", minWidth: "300px" }}
+              >
+                <h3>Profile Information</h3>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    marginTop: "20px",
+                    gap: "15px",
+                  }}
+                >
+                  <img
+                    src={`https://ui-avatars.com/api/?name=${username || "User"}&background=random&size=80`}
+                    alt="User"
+                    style={{ borderRadius: "50%", border: "2px solid #3b82f6" }}
+                  />
+                  <div>
+                    <h2
+                      style={{ margin: "0", fontSize: "20px", color: "#fff" }}
+                    >
+                      {username || "Guest User"}
+                    </h2>
+                    <p
+                      style={{
+                        margin: "5px 0 0 0",
+                        color: "#64748b",
+                        fontSize: "14px",
+                      }}
+                    >
+                      Active Developer
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Security / Change Password Card */}
+              <div
+                className="dash-action-card"
+                style={{ flex: "2", minWidth: "300px" }}
+              >
+                <h3>Security</h3>
+                <p className="dash-card-desc">
+                  Update your password to keep your account secure.
+                </p>
+
+                <form
+                  onSubmit={handleChangePassword}
+                  style={{
+                    marginTop: "20px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "15px",
+                  }}
+                >
+                  <input
+                    type="password"
+                    placeholder="Current Password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="dash-input"
+                    required
+                  />
+                  <input
+                    type="password"
+                    placeholder="New Password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="dash-input"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    className="dash-btn-primary"
+                    style={{ alignSelf: "flex-start", padding: "10px 20px" }}
+                  >
+                    Save New Password
+                  </button>
+                </form>
+              </div>
+            </section>
+          </>
         )}
 
-        {/* 🟢 CHANGE: Footer me marginTop auto dekar isko stick kar diya hai */}
         <footer
           className="dash-footer"
           style={{ marginTop: "auto", padding: "20px 0" }}

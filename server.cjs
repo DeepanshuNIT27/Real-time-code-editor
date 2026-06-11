@@ -292,13 +292,11 @@ app.post("/api/auth/google", async (req, res) => {
       { expiresIn: "7d" },
     );
 
-    res
-      .status(200)
-      .json({
-        token,
-        username: user.username,
-        message: "Google Login successful",
-      });
+    res.status(200).json({
+      token,
+      username: user.username,
+      message: "Google Login successful",
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error during Google login" });
@@ -384,6 +382,38 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
+
+// ==========================================
+// 🟢 NEW ENDPOINT: Change Password (Logged-in Users)
+// ==========================================
+app.post("/api/auth/change-password", authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id; // authenticateToken middleware se aayega
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Purana password check karo
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Incorrect current password" });
+    }
+
+    // Naya password hash karke save karo
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    user.password = hashedPassword;
+    await user.save();
+
+    res.status(200).json({ message: "Password updated successfully!" });
+  } catch (error) {
+    console.error("Change password error:", error);
+    res.status(500).json({ error: "Server error during password change" });
+  }
+});
+// ==========================================
 
 // 🟢 Save/Update Room in History
 app.post("/api/rooms/save", authenticateToken, async (req, res) => {
