@@ -104,6 +104,21 @@ const EditorPageContent = ({ roomId, locationState }) => {
 
   const filesRef = useRef(files);
   const activeFileIdRef = useRef(activeFileId);
+  const isWorkspaceSynced = useRef(false);
+
+  // 🌟 FIX: Page reload hone par unsaved changes udne se bachane ke liye warning
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
 
   useEffect(() => {
     filesRef.current = files;
@@ -116,7 +131,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
   useEffect(() => {
     let isMounted = true;
 
-    // Handlers define kiye taaki cleanup me aasani ho
     const handleConnectError = (err) => {
       toast.error("Socket connection failed, try again later.");
       reactNavigator("/");
@@ -164,14 +178,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
             toast.success(`${username} joined the room.`);
           }
 
-          // 🌟 PRODUCTION FIX 1: Leader/Host Election
-          // Check if current user is the "oldest" member in the room (the leader)
-          // We use clients list from the server to determine the leader.
-          const isLeader =
-            clients.length > 0 && clients[0].socketId === socketRef.current.id;
-
-          // Sirf "Leader" hi naye user ko data bhejega. Multi-sync race condition KHATAM!
-          if (socketId !== socketRef.current.id && isLeader) {
+          if (socketId !== socketRef.current.id) {
             const currentCode = codeRef.current || "";
             const currentActiveId = activeFileIdRef.current;
             const updatedWorkspace = filesRef.current.map((f) =>
@@ -189,45 +196,45 @@ const EditorPageContent = ({ roomId, locationState }) => {
       );
 
       socketRef.current.on(
-        ACTIONS.CODE_CHANGE,
+        "sync_workspace",
         ({
-          fileId,
           code,
           files: incomingFiles,
           activeFileId: incomingActiveFileId,
         }) => {
-          // 🌟 PRODUCTION FIX 2: Strict check to avoid accidental overwrites
-          // Ye tabhi chalega jab poora workspace initialize karna ho
-          if (
-            incomingFiles &&
-            Array.isArray(incomingFiles) &&
-            incomingFiles.length > 0 &&
-            incomingActiveFileId
-          ) {
+          if (isWorkspaceSynced.current) return;
+
+          if (incomingFiles && incomingFiles.length > 0) {
             setFiles(incomingFiles);
-            setActiveFileId(incomingActiveFileId);
+            if (incomingActiveFileId) {
+              setActiveFileId(incomingActiveFileId);
+            }
+
             const activeFileData = incomingFiles.find(
               (f) => f.id === incomingActiveFileId,
             );
+
             codeRef.current = activeFileData
               ? activeFileData.content
               : code || "";
-            return;
-          }
 
-          // Regular single file typing update
-          if (fileId) {
-            setFiles((prev) =>
-              prev.map((f) => (f.id === fileId ? { ...f, content: code } : f)),
-            );
-            if (fileId === activeFileIdRef.current) {
-              codeRef.current = code;
-            }
-          } else {
-            codeRef.current = code;
+            isWorkspaceSynced.current = true;
           }
         },
       );
+
+      socketRef.current.on(ACTIONS.CODE_CHANGE, ({ fileId, code }) => {
+        if (fileId) {
+          setFiles((prev) =>
+            prev.map((f) => (f.id === fileId ? { ...f, content: code } : f)),
+          );
+          if (fileId === activeFileIdRef.current) {
+            codeRef.current = code;
+          }
+        } else {
+          codeRef.current = code;
+        }
+      });
 
       socketRef.current.on(ACTIONS.DISCONNECTED, ({ socketId, username }) => {
         toast.success(`${username} left the room.`);
@@ -267,7 +274,6 @@ const EditorPageContent = ({ roomId, locationState }) => {
 
     return () => {
       isMounted = false;
-      // 🌟 PRODUCTION FIX 3: Complete Memory Leak Cleanup
       if (socketRef.current) {
         socketRef.current.off("connect_error");
         socketRef.current.off("connect_failed");
@@ -277,6 +283,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
         socketRef.current.off("file_delete");
         socketRef.current.off("file_switch");
         socketRef.current.off("panel_switch");
+        socketRef.current.off("sync_workspace");
         socketRef.current.off(ACTIONS.CODE_CHANGE);
         socketRef.current.disconnect();
       }
@@ -445,7 +452,7 @@ const EditorPageContent = ({ roomId, locationState }) => {
                     return [...updated, newFile];
                   });
 
-                  codeRef.current = ""; // Nayi file ekdum blank
+                  codeRef.current = "";
                   setActiveFileId(newFile.id);
 
                   socketRef.current.emit("file_create", {

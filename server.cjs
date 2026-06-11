@@ -501,7 +501,7 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 
-// --- 👇 SOCKETS CODE (Untouched) 👇 ---
+// --- 👇 SOCKETS CODE 👇 ---
 const userSocketMap = {};
 function getAllConnectedClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
@@ -546,8 +546,9 @@ io.on("connection", (socket) => {
     socket.in(roomId).emit("panel_switch", { panel });
   });
 
-  socket.on(ACTIONS.SYNC_CODE, ({ socketId, code }) => {
-    io.to(socketId).emit(ACTIONS.CODE_CHANGE, { code });
+  // 🌟 YAHAN CHANGE KIYA HAI: Ab ye "sync_workspace" emit karega, naye data structure ke sath
+  socket.on(ACTIONS.SYNC_CODE, ({ socketId, code, files, activeFileId }) => {
+    io.to(socketId).emit("sync_workspace", { code, files, activeFileId });
   });
 
   socket.on("whiteboard_draw", ({ roomId, delta }) => {
