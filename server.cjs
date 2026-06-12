@@ -15,12 +15,13 @@ const jwt = require("jsonwebtoken");
 const admin = require("firebase-admin"); // 🔒 ADDED: Firebase Admin SDK for verification
 
 // ==========================================
-// 🛡️ CRITICAL GUARDS: Fail-Fast Check for ENV Variables
+// 🛡️ CRITICAL GUARDS: Graceful Exit for ENV Variables
 // ==========================================
 if (!process.env.MONGO_URI) {
-  throw new Error(
+  console.error(
     "🚨 FATAL ERROR: MONGO_URI is missing in environment variables.",
   );
+  process.exit(1);
 }
 
 if (
@@ -28,19 +29,20 @@ if (
   !process.env.FIREBASE_CLIENT_EMAIL ||
   !process.env.FIREBASE_PRIVATE_KEY
 ) {
-  throw new Error(
+  console.error(
     "🚨 FATAL ERROR: Missing Firebase environment variables (PROJECT_ID, CLIENT_EMAIL, or PRIVATE_KEY).",
   );
+  process.exit(1);
 }
 
-// 🔒 Firebase Admin Setup (Render Compatible & Safe)
+// 🔒 Firebase Admin Setup (Production Safe & Hot-Reload Proof)
 try {
-  if (!admin.apps.length) {
+  // Safe check using optional chaining to prevent undefined 'length' crash
+  if (!admin.apps?.length) {
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        // SAFE FIX: Fallback to empty string if undefined to prevent .replace crash
         privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(
           /\\n/g,
           "\n",
@@ -51,8 +53,6 @@ try {
   }
 } catch (error) {
   console.error("❌ Firebase Admin Initialization Error:", error.message);
-  // Throwing the error so Render explicitly logs it instead of failing silently later
-  throw error;
 }
 
 const server = http.createServer(app);
