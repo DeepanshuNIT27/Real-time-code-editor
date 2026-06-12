@@ -1,16 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-// 🟢 NEW: Firebase imports added and updated here
+// 🟢 NEW: Firebase imports added here
 import { auth, googleProvider } from "../firebase";
-import {
-  signInWithPopup,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  sendEmailVerification,
-  signOut,
-} from "firebase/auth";
+import { signInWithPopup } from "firebase/auth";
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -19,8 +12,15 @@ const AuthPage = () => {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
 
-  // 🟢 FORGOT PASSWORD STATE
+  // 🟢 Naye states Forgot Password flow ke liye
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
+  const [forgotStage, setForgotStage] = useState(1); // 1 = Enter Email, 2 = Enter OTP & New Password
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+
+  // 🟢 NEW: Sign-Up OTP verification ke states
+  const [isSignupOtpMode, setIsSignupOtpMode] = useState(false);
+  const [signupOtp, setSignupOtp] = useState("");
 
   // --- Terminal Lines List ---
   const terminalLines = [
@@ -53,6 +53,7 @@ const AuthPage = () => {
     };
   }, [isLogin]);
 
+  // --- 🟢 FIX: Only 2 items in loop now ---
   const headlines = ["Build Faster.", "Ship Better."];
   const [headlineIndex, setHeadlineIndex] = useState(0);
 
@@ -65,23 +66,20 @@ const AuthPage = () => {
 
   const navigate = useNavigate();
 
-  // 🟢 Google Login Handler (SECURED)
+  // 🟢 NEW: Google Login/Signup Handler added here
   const handleGoogleLogin = async () => {
     try {
+      // Firebase ka popup khulega
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
 
-      // 🔒 Firebase token nikalo
-      const firebaseToken = await user.getIdToken();
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
-      // 🔒 Sirf headers me token bhejo, spoofing impossible
-      const response = await fetch(`${API_BASE_URL}/api/auth/firebase-sync`, {
+      // Backend ko data bhejo JWT token ke liye
+      const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${firebaseToken}`,
-        },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email, username: user.displayName }),
       });
 
       const data = await response.json();
@@ -99,118 +97,139 @@ const AuthPage = () => {
     }
   };
 
-  // 🟢 Normal Login/Signup Handler (SECURED)
+  // 🟢 Normal Login/Signup Handler
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const toastId = toast.loading(
-      isLogin ? "Signing in..." : "Creating account...",
-    );
+    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/signup";
+    const payload = isLogin
+      ? { email, password }
+      : { username: name, email, password };
 
     const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
     try {
-      if (isLogin) {
-        // Firebase Login
-        const userCredential = await signInWithEmailAndPassword(
-          auth,
-          email,
-          password,
-        );
-        const user = userCredential.user;
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-        // Check if email is verified
-        if (!user.emailVerified) {
-          await signOut(auth);
-          toast.error("Please verify your email before logging in!", {
-            id: toastId,
-          });
-          return;
-        }
+      const data = await response.json();
 
-        // 🔒 Firebase token nikalo
-        const firebaseToken = await user.getIdToken();
-
-        // 🔒 Backend sync with secure headers
-        const response = await fetch(`${API_BASE_URL}/api/auth/firebase-sync`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${firebaseToken}`,
-          },
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          localStorage.setItem("token", data.token); // Custom Backend JWT stored
+      if (response.ok) {
+        if (isLogin) {
+          // Login hai toh direct home page par bhej do
+          localStorage.setItem("token", data.token);
           localStorage.setItem("username", data.username);
-          toast.success("Logged in successfully!", { id: toastId });
+          toast.success("Logged in successfully!");
           navigate("/home");
         } else {
-          toast.error(data.error || "Backend sync failed", { id: toastId });
+          // 🟢 SIGNUP hai toh OTP screen dikhao
+          toast.success(data.message || "Verification OTP sent to your email!");
+          setIsSignupOtpMode(true);
         }
       } else {
-        // Firebase Sign Up
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password,
-        );
-        const user = userCredential.user;
-
-        await sendEmailVerification(user);
-        await signOut(auth);
-
-        toast.success(
-          "Verification email sent! Please check your inbox and verify before logging in. 🚀",
-          { id: toastId, duration: 5000 },
-        );
-
-        setIsLogin(true);
-        setPassword("");
+        toast.error(data.error || "Authentication failed");
       }
     } catch (error) {
-      console.error("Firebase Auth error:", error);
-      let errorMessage = "Authentication failed";
-      if (error.code === "auth/email-already-in-use")
-        errorMessage = "Email already exists! Please Login.";
-      if (
-        error.code === "auth/wrong-password" ||
-        error.code === "auth/user-not-found" ||
-        error.code === "auth/invalid-credential"
-      )
-        errorMessage = "Invalid email or password!";
-      if (error.code === "auth/weak-password")
-        errorMessage = "Password should be at least 6 characters!";
-
-      toast.error(errorMessage, { id: toastId });
+      console.error("Auth error:", error);
+      toast.error("Server error! Backend chalu hai ya nahi check karo.");
     }
   };
 
-  // 🟢 Firebase Password Reset Handler
-  const handleForgotPassword = async (e) => {
+  // 🟢 NEW: Verify Sign-Up OTP Handler
+  const handleVerifySignup = async (e) => {
+    e.preventDefault();
+    if (!signupOtp) return toast.error("Please enter the 6-digit OTP");
+
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+    const toastId = toast.loading("Verifying OTP...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/verify-signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp: signupOtp }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message || "Account verified successfully!", {
+          id: toastId,
+        });
+        // OTP verify hone ke baad user ko automatically login karwa do
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("username", data.username);
+        navigate("/home");
+      } else {
+        toast.error(data.error || "Verification failed", { id: toastId });
+      }
+    } catch (error) {
+      console.error("Verification error:", error);
+      toast.error("Server error during verification!", { id: toastId });
+    }
+  };
+
+  // 🟢 Send OTP Handler (Forgot Password)
+  const handleSendOTP = async (e) => {
     e.preventDefault();
     if (!email) return toast.error("Please enter your email first");
 
-    const toastId = toast.loading("Sending reset link...");
+    const toastId = toast.loading("Sending OTP to your email...");
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
     try {
-      await sendPasswordResetEmail(auth, email);
-      toast.success("Password reset link sent to your email! 🚀", {
-        id: toastId,
+      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
       });
 
-      setIsForgotPasswordMode(false);
-      setEmail("");
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message, { id: toastId });
+        setForgotStage(2); // Stage 2 par le jao
+      } else {
+        toast.error(data.error || "Failed to send OTP", { id: toastId });
+      }
+    } catch (error) {
+      console.error("OTP error:", error);
+      toast.error("Server error!", { id: toastId });
+    }
+  };
+
+  // 🟢 Reset Password Handler
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!otp || !newPassword) return toast.error("Please fill all fields");
+
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, otp, newPassword }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message);
+        // Reset karke wapas login screen par bhej do
+        setIsForgotPasswordMode(false);
+        setForgotStage(1);
+        setOtp("");
+        setNewPassword("");
+        setPassword("");
+      } else {
+        toast.error(data.error || "Failed to reset password");
+      }
     } catch (error) {
       console.error("Reset error:", error);
-      let errorMessage = "Failed to send link";
-      if (error.code === "auth/user-not-found")
-        errorMessage = "No account found with this email!";
-      if (error.code === "auth/invalid-email")
-        errorMessage = "Invalid email format!";
-
-      toast.error(errorMessage, { id: toastId });
+      toast.error("Server error!");
     }
   };
 
@@ -257,6 +276,7 @@ const AuthPage = () => {
           <span style={styles.logoText}>CodeSync</span>
         </div>
 
+        {/* 🟢 Static Head + Smooth Color Switching Subhead */}
         <h1 style={styles.mainTitle}>
           <div style={{ color: "#fff", marginBottom: "4px" }}>
             Code Together.
@@ -283,6 +303,7 @@ const AuthPage = () => {
           <span style={styles.badge}>🔒 Secure Rooms</span>
         </div>
 
+        {/* Compact Terminal Box */}
         <div style={styles.terminalBox}>
           <div style={styles.terminalHeader}>
             <span style={{ ...styles.dot, backgroundColor: "#ef4444" }}></span>
@@ -309,41 +330,121 @@ const AuthPage = () => {
       {/* RIGHT COLUMN: GLASS CARD AUTH */}
       <div style={styles.rightColumn}>
         <div style={styles.card}>
+          {/* ========================================== */}
+          {/* 🟢 FORGOT PASSWORD VIEW */}
+          {/* ========================================== */}
           {isForgotPasswordMode ? (
             <>
               <h2 style={styles.cardTitle}>Reset Password</h2>
               <p style={styles.cardSubtitle}>
-                Enter your registered email to get a reset link
+                {forgotStage === 1
+                  ? "Enter your email to receive a recovery OTP"
+                  : `OTP sent to ${email}`}
               </p>
 
-              <form onSubmit={handleForgotPassword} style={styles.form}>
-                <div style={styles.inputWrapper}>
-                  <span style={styles.inputIcon}>✉️</span>
-                  <input
-                    type="email"
-                    placeholder="Email Address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    style={styles.input}
-                  />
-                </div>
-                <button type="submit" style={styles.submitButton}>
-                  Send Reset Link
-                </button>
-              </form>
+              {forgotStage === 1 ? (
+                // STAGE 1: Request OTP
+                <form onSubmit={handleSendOTP} style={styles.form}>
+                  <div style={styles.inputWrapper}>
+                    <span style={styles.inputIcon}>✉️</span>
+                    <input
+                      type="email"
+                      placeholder="Email Address"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      style={styles.input}
+                    />
+                  </div>
+                  <button type="submit" style={styles.submitButton}>
+                    Send OTP
+                  </button>
+                </form>
+              ) : (
+                // STAGE 2: Verify OTP and Set New Password
+                <form onSubmit={handleResetPassword} style={styles.form}>
+                  <div style={styles.inputWrapper}>
+                    <span style={styles.inputIcon}>🔑</span>
+                    <input
+                      type="text"
+                      placeholder="Enter 6-digit OTP"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value)}
+                      required
+                      style={styles.input}
+                    />
+                  </div>
+                  <div style={styles.inputWrapper}>
+                    <span style={styles.inputIcon}>🔒</span>
+                    <input
+                      type="password"
+                      placeholder="New Password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      style={styles.input}
+                    />
+                  </div>
+                  <button type="submit" style={styles.submitButton}>
+                    Update Password
+                  </button>
+                </form>
+              )}
 
               <p style={styles.switchPrompt}>
                 Remember your password?{" "}
                 <span
-                  onClick={() => setIsForgotPasswordMode(false)}
+                  onClick={() => {
+                    setIsForgotPasswordMode(false);
+                    setForgotStage(1);
+                  }}
                   style={styles.switchLink}
                 >
                   Back to Login
                 </span>
               </p>
             </>
+          ) : isSignupOtpMode ? (
+            /* ========================================== */
+            /* 🟢 SIGNUP OTP VERIFICATION VIEW */
+            /* ========================================== */
+            <>
+              <h2 style={styles.cardTitle}>Verify Account</h2>
+              <p style={styles.cardSubtitle}>
+                Enter the 6-digit verification OTP sent to {email}
+              </p>
+
+              <form onSubmit={handleVerifySignup} style={styles.form}>
+                <div style={styles.inputWrapper}>
+                  <span style={styles.inputIcon}>🔑</span>
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit OTP"
+                    value={signupOtp}
+                    onChange={(e) => setSignupOtp(e.target.value)}
+                    required
+                    style={styles.input}
+                  />
+                </div>
+                <button type="submit" style={styles.submitButton}>
+                  Verify & Register 🚀
+                </button>
+              </form>
+
+              <p style={styles.switchPrompt}>
+                Wrong email?{" "}
+                <span
+                  onClick={() => setIsSignupOtpMode(false)}
+                  style={styles.switchLink}
+                >
+                  Back to Sign Up
+                </span>
+              </p>
+            </>
           ) : (
+            /* ========================================== */
+            /* 🟢 NORMAL LOGIN / SIGNUP VIEW */
+            /* ========================================== */
             <>
               <h2 style={styles.cardTitle}>Welcome Back</h2>
               <p style={styles.cardSubtitle}>
@@ -437,6 +538,7 @@ const AuthPage = () => {
                 </button>
               </form>
 
+              {/* 🟢 CHANGED: Dummy toast ki jagah handleGoogleLogin function laga diya gaya hai */}
               <button
                 type="button"
                 style={styles.googleBtn}
@@ -469,6 +571,7 @@ const AuthPage = () => {
   );
 };
 
+// --- CSS Injector ---
 const customCSS = `
   * {
     box-sizing: border-box;
@@ -496,6 +599,7 @@ const customCSS = `
   }
 `;
 
+// --- Styles Layout ---
 const styles = {
   container: {
     display: "flex",
@@ -580,6 +684,7 @@ const styles = {
     animation: "blink 1s infinite",
     fontSize: "14px",
   },
+
   rightColumn: {
     flex: 1,
     display: "flex",
@@ -670,6 +775,8 @@ const styles = {
     marginTop: "5px",
     boxShadow: "0 4px 15px rgba(0, 245, 212, 0.2)",
   },
+
+  // 🟢 NEW: Google Button styling
   googleBtn: {
     display: "flex",
     alignItems: "center",
@@ -692,6 +799,7 @@ const styles = {
     height: "20px",
     marginRight: "10px",
   },
+
   switchPrompt: {
     color: "#64748b",
     textAlign: "center",
