@@ -14,18 +14,45 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const admin = require("firebase-admin"); // 🔒 ADDED: Firebase Admin SDK for verification
 
-// 🔒 Firebase Admin Setup
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      // Replace \\n in the env variable to proper line breaks
-      privateKey: process.env.FIREBASE_PRIVATE_KEY
-        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
-        : undefined,
-    }),
-  });
+// ==========================================
+// 🛡️ CRITICAL GUARDS: Fail-Fast Check for ENV Variables
+// ==========================================
+if (!process.env.MONGO_URI) {
+  throw new Error(
+    "🚨 FATAL ERROR: MONGO_URI is missing in environment variables.",
+  );
+}
+
+if (
+  !process.env.FIREBASE_PROJECT_ID ||
+  !process.env.FIREBASE_CLIENT_EMAIL ||
+  !process.env.FIREBASE_PRIVATE_KEY
+) {
+  throw new Error(
+    "🚨 FATAL ERROR: Missing Firebase environment variables (PROJECT_ID, CLIENT_EMAIL, or PRIVATE_KEY).",
+  );
+}
+
+// 🔒 Firebase Admin Setup (Render Compatible & Safe)
+try {
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        // SAFE FIX: Fallback to empty string if undefined to prevent .replace crash
+        privateKey: (process.env.FIREBASE_PRIVATE_KEY || "").replace(
+          /\\n/g,
+          "\n",
+        ),
+      }),
+    });
+    console.log("✅ Firebase Admin Initialized Successfully");
+  }
+} catch (error) {
+  console.error("❌ Firebase Admin Initialization Error:", error.message);
+  // Throwing the error so Render explicitly logs it instead of failing silently later
+  throw error;
 }
 
 const server = http.createServer(app);
@@ -83,8 +110,12 @@ app.post("/api/video/token", async (req, res) => {
     if (!userId) return res.status(400).json({ error: "User ID is required" });
     const apiKey = process.env.STREAM_API_KEY;
     const apiSecret = process.env.STREAM_API_SECRET;
-    if (!apiKey || !apiSecret)
+    if (!apiKey || !apiSecret) {
+      console.warn(
+        "⚠️ Stream credentials missing in env. Video token generation will fail.",
+      );
       return res.status(500).json({ error: "Stream credentials missing" });
+    }
     const serverClient = new StreamClient(apiKey, apiSecret);
     const token = serverClient.createCallToken({
       user_id: userId,
@@ -324,5 +355,9 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Listening on port ${PORT}`));
+const PORT = process.env.PORT || 10000;
+
+// 🟢 CRITICAL RENDER FIX: explicitly bind to "0.0.0.0"
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Listening on port ${PORT}`);
+});
