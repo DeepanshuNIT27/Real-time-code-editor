@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-// 🟢 NEW: Firebase imports added here
 import { auth, googleProvider } from "../firebase";
-import { signInWithPopup } from "firebase/auth";
+import {
+  signInWithPopup,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+} from "firebase/auth";
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -12,17 +17,8 @@ const AuthPage = () => {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
 
-  // 🟢 Naye states Forgot Password flow ke liye
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
-  const [forgotStage, setForgotStage] = useState(1); // 1 = Enter Email, 2 = Enter OTP & New Password
-  const [otp, setOtp] = useState("");
-  const [newPassword, setNewPassword] = useState("");
 
-  // 🟢 NEW: Sign-Up OTP verification ke states
-  const [isSignupOtpMode, setIsSignupOtpMode] = useState(false);
-  const [signupOtp, setSignupOtp] = useState("");
-
-  // --- Terminal Lines List ---
   const terminalLines = [
     "$ initializing workspace...",
     "✓ Workspace ready",
@@ -53,7 +49,6 @@ const AuthPage = () => {
     };
   }, [isLogin]);
 
-  // --- 🟢 FIX: Only 2 items in loop now ---
   const headlines = ["Build Faster.", "Ship Better."];
   const [headlineIndex, setHeadlineIndex] = useState(0);
 
@@ -66,16 +61,12 @@ const AuthPage = () => {
 
   const navigate = useNavigate();
 
-  // 🟢 NEW: Google Login/Signup Handler added here
   const handleGoogleLogin = async () => {
     try {
-      // Firebase ka popup khulega
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
-      // Backend ko data bhejo JWT token ke liye
       const response = await fetch(`${API_BASE_URL}/api/auth/google`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -97,139 +88,93 @@ const AuthPage = () => {
     }
   };
 
-  // 🟢 Normal Login/Signup Handler
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/signup";
-    const payload = isLogin
-      ? { email, password }
-      : { username: name, email, password };
-
-    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+    const toastId = toast.loading(
+      isLogin ? "Logging in..." : "Creating account...",
+    );
 
     try {
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      if (!isLogin) {
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password,
+        );
+        await sendEmailVerification(userCredential.user);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        if (isLogin) {
-          // Login hai toh direct home page par bhej do
-          localStorage.setItem("token", data.token);
-          localStorage.setItem("username", data.username);
-          toast.success("Logged in successfully!");
-          navigate("/home");
-        } else {
-          // 🟢 SIGNUP hai toh OTP screen dikhao
-          toast.success(data.message || "Verification OTP sent to your email!");
-          setIsSignupOtpMode(true);
-        }
+        toast.success(
+          "Account created! Verification link sent to your email.",
+          { id: toastId },
+        );
+        await auth.signOut();
+        setIsLogin(true);
+        setPassword("");
       } else {
-        toast.error(data.error || "Authentication failed");
+        const userCredential = await signInWithEmailAndPassword(
+          auth,
+          email,
+          password,
+        );
+
+        if (!userCredential.user.emailVerified) {
+          toast.error("Please verify your email first! Check your inbox.", {
+            id: toastId,
+          });
+          await auth.signOut();
+          return;
+        }
+
+        // 🟢 FIX: Getting token and syncing with DB
+        const firebaseToken = await userCredential.user.getIdToken();
+        localStorage.setItem("token", firebaseToken);
+        localStorage.setItem(
+          "username",
+          userCredential.user.displayName || email.split("@")[0],
+        );
+
+        const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+
+        // 🟢 Sync request to ensure MongoDB user is created instantly
+        try {
+          await fetch(`${API_BASE_URL}/api/auth/sync-user`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${firebaseToken}`,
+            },
+          });
+        } catch (syncErr) {
+          console.error("Failed to sync user with DB:", syncErr);
+        }
+
+        toast.success("Logged in successfully!", { id: toastId });
+        navigate("/home");
       }
     } catch (error) {
       console.error("Auth error:", error);
-      toast.error("Server error! Backend chalu hai ya nahi check karo.");
+      toast.error(
+        error.message.replace("Firebase: ", "") || "Authentication failed",
+        { id: toastId },
+      );
     }
   };
 
-  // 🟢 NEW: Verify Sign-Up OTP Handler
-  const handleVerifySignup = async (e) => {
-    e.preventDefault();
-    if (!signupOtp) return toast.error("Please enter the 6-digit OTP");
-
-    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-    const toastId = toast.loading("Verifying OTP...");
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify-signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp: signupOtp }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success(data.message || "Account verified successfully!", {
-          id: toastId,
-        });
-        // OTP verify hone ke baad user ko automatically login karwa do
-        localStorage.setItem("token", data.token);
-        localStorage.setItem("username", data.username);
-        navigate("/home");
-      } else {
-        toast.error(data.error || "Verification failed", { id: toastId });
-      }
-    } catch (error) {
-      console.error("Verification error:", error);
-      toast.error("Server error during verification!", { id: toastId });
-    }
-  };
-
-  // 🟢 Send OTP Handler (Forgot Password)
-  const handleSendOTP = async (e) => {
+  const handleForgotPassword = async (e) => {
     e.preventDefault();
     if (!email) return toast.error("Please enter your email first");
 
-    const toastId = toast.loading("Sending OTP to your email...");
-    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
+    const toastId = toast.loading("Sending reset link...");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success(data.message, { id: toastId });
-        setForgotStage(2); // Stage 2 par le jao
-      } else {
-        toast.error(data.error || "Failed to send OTP", { id: toastId });
-      }
-    } catch (error) {
-      console.error("OTP error:", error);
-      toast.error("Server error!", { id: toastId });
-    }
-  };
-
-  // 🟢 Reset Password Handler
-  const handleResetPassword = async (e) => {
-    e.preventDefault();
-    if (!otp || !newPassword) return toast.error("Please fill all fields");
-
-    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp, newPassword }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success(data.message);
-        // Reset karke wapas login screen par bhej do
-        setIsForgotPasswordMode(false);
-        setForgotStage(1);
-        setOtp("");
-        setNewPassword("");
-        setPassword("");
-      } else {
-        toast.error(data.error || "Failed to reset password");
-      }
+      await sendPasswordResetEmail(auth, email);
+      toast.success("Password reset link sent to your email!", { id: toastId });
+      setIsForgotPasswordMode(false);
     } catch (error) {
       console.error("Reset error:", error);
-      toast.error("Server error!");
+      toast.error(
+        error.message.replace("Firebase: ", "") || "Failed to send reset link",
+        { id: toastId },
+      );
     }
   };
 
@@ -269,14 +214,12 @@ const AuthPage = () => {
         {"{}"}
       </div>
 
-      {/* LEFT COLUMN: BRANDING & LOGS */}
       <div className="left-column" style={styles.leftColumn}>
         <div style={styles.logoContainer}>
           <span style={styles.logoIcon}>🧬</span>
           <span style={styles.logoText}>CodeSync</span>
         </div>
 
-        {/* 🟢 Static Head + Smooth Color Switching Subhead */}
         <h1 style={styles.mainTitle}>
           <div style={{ color: "#fff", marginBottom: "4px" }}>
             Code Together.
@@ -303,7 +246,6 @@ const AuthPage = () => {
           <span style={styles.badge}>🔒 Secure Rooms</span>
         </div>
 
-        {/* Compact Terminal Box */}
         <div style={styles.terminalBox}>
           <div style={styles.terminalHeader}>
             <span style={{ ...styles.dot, backgroundColor: "#ef4444" }}></span>
@@ -327,124 +269,43 @@ const AuthPage = () => {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: GLASS CARD AUTH */}
       <div style={styles.rightColumn}>
         <div style={styles.card}>
-          {/* ========================================== */}
-          {/* 🟢 FORGOT PASSWORD VIEW */}
-          {/* ========================================== */}
           {isForgotPasswordMode ? (
             <>
               <h2 style={styles.cardTitle}>Reset Password</h2>
               <p style={styles.cardSubtitle}>
-                {forgotStage === 1
-                  ? "Enter your email to receive a recovery OTP"
-                  : `OTP sent to ${email}`}
+                Enter your email to receive a password reset link
               </p>
 
-              {forgotStage === 1 ? (
-                // STAGE 1: Request OTP
-                <form onSubmit={handleSendOTP} style={styles.form}>
-                  <div style={styles.inputWrapper}>
-                    <span style={styles.inputIcon}>✉️</span>
-                    <input
-                      type="email"
-                      placeholder="Email Address"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      style={styles.input}
-                    />
-                  </div>
-                  <button type="submit" style={styles.submitButton}>
-                    Send OTP
-                  </button>
-                </form>
-              ) : (
-                // STAGE 2: Verify OTP and Set New Password
-                <form onSubmit={handleResetPassword} style={styles.form}>
-                  <div style={styles.inputWrapper}>
-                    <span style={styles.inputIcon}>🔑</span>
-                    <input
-                      type="text"
-                      placeholder="Enter 6-digit OTP"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value)}
-                      required
-                      style={styles.input}
-                    />
-                  </div>
-                  <div style={styles.inputWrapper}>
-                    <span style={styles.inputIcon}>🔒</span>
-                    <input
-                      type="password"
-                      placeholder="New Password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      required
-                      style={styles.input}
-                    />
-                  </div>
-                  <button type="submit" style={styles.submitButton}>
-                    Update Password
-                  </button>
-                </form>
-              )}
+              <form onSubmit={handleForgotPassword} style={styles.form}>
+                <div style={styles.inputWrapper}>
+                  <span style={styles.inputIcon}>✉️</span>
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    style={styles.input}
+                  />
+                </div>
+                <button type="submit" style={styles.submitButton}>
+                  Send Reset Link
+                </button>
+              </form>
 
               <p style={styles.switchPrompt}>
                 Remember your password?{" "}
                 <span
-                  onClick={() => {
-                    setIsForgotPasswordMode(false);
-                    setForgotStage(1);
-                  }}
+                  onClick={() => setIsForgotPasswordMode(false)}
                   style={styles.switchLink}
                 >
                   Back to Login
                 </span>
               </p>
             </>
-          ) : isSignupOtpMode ? (
-            /* ========================================== */
-            /* 🟢 SIGNUP OTP VERIFICATION VIEW */
-            /* ========================================== */
-            <>
-              <h2 style={styles.cardTitle}>Verify Account</h2>
-              <p style={styles.cardSubtitle}>
-                Enter the 6-digit verification OTP sent to {email}
-              </p>
-
-              <form onSubmit={handleVerifySignup} style={styles.form}>
-                <div style={styles.inputWrapper}>
-                  <span style={styles.inputIcon}>🔑</span>
-                  <input
-                    type="text"
-                    placeholder="Enter 6-digit OTP"
-                    value={signupOtp}
-                    onChange={(e) => setSignupOtp(e.target.value)}
-                    required
-                    style={styles.input}
-                  />
-                </div>
-                <button type="submit" style={styles.submitButton}>
-                  Verify & Register 🚀
-                </button>
-              </form>
-
-              <p style={styles.switchPrompt}>
-                Wrong email?{" "}
-                <span
-                  onClick={() => setIsSignupOtpMode(false)}
-                  style={styles.switchLink}
-                >
-                  Back to Sign Up
-                </span>
-              </p>
-            </>
           ) : (
-            /* ========================================== */
-            /* 🟢 NORMAL LOGIN / SIGNUP VIEW */
-            /* ========================================== */
             <>
               <h2 style={styles.cardTitle}>Welcome Back</h2>
               <p style={styles.cardSubtitle}>
@@ -538,7 +399,6 @@ const AuthPage = () => {
                 </button>
               </form>
 
-              {/* 🟢 CHANGED: Dummy toast ki jagah handleGoogleLogin function laga diya gaya hai */}
               <button
                 type="button"
                 style={styles.googleBtn}
@@ -571,7 +431,6 @@ const AuthPage = () => {
   );
 };
 
-// --- CSS Injector ---
 const customCSS = `
   * {
     box-sizing: border-box;
@@ -599,7 +458,6 @@ const customCSS = `
   }
 `;
 
-// --- Styles Layout ---
 const styles = {
   container: {
     display: "flex",
@@ -776,7 +634,6 @@ const styles = {
     boxShadow: "0 4px 15px rgba(0, 245, 212, 0.2)",
   },
 
-  // 🟢 NEW: Google Button styling
   googleBtn: {
     display: "flex",
     alignItems: "center",
