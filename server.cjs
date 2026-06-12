@@ -11,11 +11,15 @@ require("dotenv").config();
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const admin = require("firebase-admin");
 
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
+// 🟢 FIX: Modern Modular Imports for Firebase Admin
+const { initializeApp, getApps, cert } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
+
+// 🟢 FIX: Safe Initialization Check
+if (getApps().length === 0) {
+  initializeApp({
+    credential: cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       privateKey: process.env.FIREBASE_PRIVATE_KEY
@@ -140,7 +144,8 @@ const authenticateToken = async (req, res, next) => {
     return next();
   } catch (err) {
     try {
-      const decodedToken = await admin.auth().verifyIdToken(token);
+      // 🟢 FIX: Used getAuth() here for Firebase modular setup
+      const decodedToken = await getAuth().verifyIdToken(token);
 
       let user = await User.findOne({ email: decodedToken.email });
 
@@ -166,7 +171,6 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
-// 🟢 NEW ENDPOINT: Added here as requested
 app.post("/api/auth/sync-user", authenticateToken, async (req, res) => {
   return res.status(200).json({
     success: true,
