@@ -8,11 +8,25 @@ const ACTIONS = require("./src/Actions.cjs");
 const { StreamClient } = require("@stream-io/node-sdk");
 require("dotenv").config();
 
-// 🟢 Database, Auth aur Mail ke liye imports
+// 🟢 Database aur Auth ke liye imports
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const { Resend } = require("resend"); // 🟢 CHANGED: Nodemailer ki jagah Resend import kiya
+const admin = require("firebase-admin"); // 🔒 ADDED: Firebase Admin SDK for verification
+
+// 🔒 Firebase Admin Setup
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      // Replace \\n in the env variable to proper line breaks
+      privateKey: process.env.FIREBASE_PRIVATE_KEY
+        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+        : undefined,
+    }),
+  });
+}
 
 const server = http.createServer(app);
 
@@ -32,13 +46,11 @@ mongoose
   .then(() => console.log("✅ MongoDB Connected Successfully"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
-// 🟢 User Schema Updated with Room History, isSaved flag, Files array, and OTP fields
+// 🟢 User Schema
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  resetOTP: { type: String, default: null },
-  resetOTPExpires: { type: Date, default: null },
   rooms: [
     {
       roomId: String,
@@ -58,58 +70,6 @@ const userSchema = new mongoose.Schema({
   ],
 });
 const User = mongoose.model("User", userSchema);
-
-// 🟢 NEW SCHEMA: Sign-Up Verification se pehle temporary user data store karne ke liye
-const tempUserSchema = new mongoose.Schema({
-  username: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  otp: { type: String, required: true },
-  otpExpires: { type: Date, required: true },
-});
-const TempUser = mongoose.model("TempUser", tempUserSchema);
-
-// ==========================================
-// 🟢 Resend Email Client & OTP Function (CHANGED)
-// ==========================================
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-const sendOTPWithEmail = async (userEmail, otp, type) => {
-  let subject = "";
-  let htmlContent = ""; // Resend me HTML emails bhejna easy hai
-
-  if (type === "signup") {
-    subject = "Verify your CodeSync Account";
-    htmlContent = `<div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h2>Welcome to CodeSync! 🚀</h2>
-                    <p>Your verification OTP is: <strong><span style="font-size: 24px; color: #3b82f6;">${otp}</span></strong></p>
-                    <p>This OTP is valid for 10 minutes.</p>
-                   </div>`;
-  } else if (type === "forgot") {
-    subject = "Reset your CodeSync Password";
-    htmlContent = `<div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h2>Password Reset Request 🔒</h2>
-                    <p>Your OTP to reset your password is: <strong><span style="font-size: 24px; color: #ef4444;">${otp}</span></strong></p>
-                    <p>Do not share this OTP with anyone.</p>
-                   </div>`;
-  }
-
-  try {
-    const data = await resend.emails.send({
-      from: "CodeSync Team <onboarding@resend.dev>", // ⚠️ Testing ke liye onboarding@resend.dev use karna zaroori hai
-      to: userEmail,
-      subject: subject,
-      html: htmlContent,
-    });
-
-    console.log("✅ Email sent via Resend:", data);
-    return { success: true };
-  } catch (error) {
-    console.error("❌ Resend Email send error:", error);
-    return { success: false, error };
-  }
-};
-// ==========================================
 
 const io = new Server(server, {
   cors: { origin: true, credentials: true, methods: ["GET", "POST"] },
@@ -137,157 +97,46 @@ app.post("/api/video/token", async (req, res) => {
   }
 });
 
-// 🟢 Signup API (UPDATED: Bhejegha OTP, Data temporary store karega)
-app.post("/api/auth/signup", async (req, res) => {
-  try {
-    const { username, email, password } = req.body;
-
-    // 1. Check karo permanent DB me user pehle se toh nahi hai
-    const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(400).json({ error: "Email already in use" });
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // 2. OTP aur Expiry Time (10 mins) generate karo
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiryTime = Date.now() + 10 * 60 * 1000;
-
-    // 3. Purana koi adhoora signup data pada ho toh clear kardo
-    await TempUser.deleteOne({ email });
-
-    // 4. Temporary collection me data save karo
-    const tempUser = new TempUser({
-      username,
-      email,
-      password: hashedPassword,
-      otp,
-      otpExpires: expiryTime,
-    });
-    await tempUser.save();
-
-    // 5. Email send karo
-    const emailRes = await sendOTPWithEmail(email, otp, "signup");
-
-    if (emailRes.success) {
-      res.status(200).json({ message: "Verification OTP sent to your email!" });
-    } else {
-      res.status(500).json({ error: "Failed to send verification email" });
-    }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error during signup request" });
-  }
-});
-
 // ==========================================
-// 🟢 NEW ENDPOINT: Verify SignUp OTP & Create Account
+// 🔒 SECURE ENDPOINT: Firebase Sync (Google + Email/Password dono ke liye)
 // ==========================================
-app.post("/api/auth/verify-signup", async (req, res) => {
+app.post("/api/auth/firebase-sync", async (req, res) => {
   try {
-    const { email, otp } = req.body;
-    const tempUser = await TempUser.findOne({ email });
+    const authHeader = req.headers.authorization;
 
-    if (!tempUser) {
+    // Check if Bearer token exists
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res
-        .status(404)
-        .json({ error: "Signup session expired. Please register again." });
+        .status(401)
+        .json({ error: "Missing or invalid Firebase token" });
     }
 
-    if (tempUser.otp !== otp) {
-      return res.status(400).json({ error: "Invalid OTP code" });
-    }
+    const idToken = authHeader.split("Bearer ")[1];
 
-    if (Date.now() > tempUser.otpExpires) {
-      return res
-        .status(400)
-        .json({ error: "OTP has expired. Please sign up again." });
-    }
+    // Verify the token using Firebase Admin SDK (Spoofing Impossible now!)
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
 
-    // OTP Sahi hai -> Move data to permanent User Collection
-    const newUser = new User({
-      username: tempUser.username,
-      email: tempUser.email,
-      password: tempUser.password, // Pehle se hashed hai
-    });
-    await newUser.save();
-
-    // Temporary data clear karo
-    await TempUser.deleteOne({ email });
-
-    // JWT token generate karke sidha login state do
-    const token = jwt.sign(
-      { id: newUser._id, username: newUser.username },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" },
-    );
-
-    res.status(201).json({
-      token,
-      username: newUser.username,
-      message: "Account verified and created successfully!",
-    });
-  } catch (err) {
-    console.error(err);
-    res
-      .status(500)
-      .json({ error: "Server error during registration verification" });
-  }
-});
-// ==========================================
-
-// 🟢 Login API
-app.post("/api/auth/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(400).json({ error: "Invalid email or password" });
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(400).json({ error: "Invalid email or password" });
-
-    const token = jwt.sign(
-      { id: user._id, username: user.username },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" },
-    );
-    res
-      .status(200)
-      .json({ token, username: user.username, message: "Login successful" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error during login" });
-  }
-});
-
-// ==========================================
-// 🟢 NEW ENDPOINT: Google Login/Signup
-// ==========================================
-app.post("/api/auth/google", async (req, res) => {
-  try {
-    const { email, username } = req.body;
+    const email = decodedToken.email;
+    const username = decodedToken.name || email.split("@")[0];
 
     let user = await User.findOne({ email });
 
     if (!user) {
-      // Agar user naya hai toh ek random secure password dekar account bana denge
+      // Create MongoDB profile if logging in for the first time
       const randomPassword =
         Math.random().toString(36).slice(-8) + Date.now().toString(36);
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(randomPassword, salt);
 
       user = new User({
-        username: username || "Google User",
+        username: username,
         email,
         password: hashedPassword,
       });
       await user.save();
     }
 
-    // Purana user ho ya naya, standard JWT token generate karke bhej do
+    // Generate custom backend JWT token using process.env.JWT_SECRET
     const token = jwt.sign(
       { id: user._id, username: user.username },
       process.env.JWT_SECRET,
@@ -297,80 +146,14 @@ app.post("/api/auth/google", async (req, res) => {
     res.status(200).json({
       token,
       username: user.username,
-      message: "Google Login successful",
+      message: "Backend sync successful",
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error during Google login" });
+    console.error("Firebase Token Verification Error:", err);
+    res.status(403).json({ error: "Invalid Firebase token or server error" });
   }
 });
 // ==========================================
-
-// 🟢 NEW ENDPOINT: Forgot Password (Send OTP)
-app.post("/api/auth/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body;
-    const user = await User.findOne({ email });
-
-    if (!user)
-      return res
-        .status(404)
-        .json({ error: "User with this email does not exist" });
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiryTime = Date.now() + 10 * 60 * 1000;
-
-    user.resetOTP = otp;
-    user.resetOTPExpires = expiryTime;
-    await user.save();
-
-    const emailRes = await sendOTPWithEmail(email, otp, "forgot");
-
-    if (emailRes.success) {
-      res.status(200).json({ message: "OTP sent successfully to your email" });
-    } else {
-      res.status(500).json({ error: "Failed to send email OTP" });
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error during forgot-password" });
-  }
-});
-
-// 🟢 NEW ENDPOINT: Reset Password (Verify OTP & Update)
-app.post("/api/auth/reset-password", async (req, res) => {
-  try {
-    const { email, otp, newPassword } = req.body;
-    const user = await User.findOne({ email });
-
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    if (!user.resetOTP || user.resetOTP !== otp) {
-      return res.status(400).json({ error: "Invalid OTP code" });
-    }
-
-    if (Date.now() > user.resetOTPExpires) {
-      return res
-        .status(400)
-        .json({ error: "OTP has expired. Please request a new one" });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-    user.password = hashedPassword;
-    user.resetOTP = null;
-    user.resetOTPExpires = null;
-    await user.save();
-
-    res
-      .status(200)
-      .json({ message: "Password updated successfully. You can login now!" });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Server error during reset-password" });
-  }
-});
 
 // 🟢 Token Verification Middleware
 const authenticateToken = (req, res, next) => {
@@ -384,38 +167,6 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
-
-// ==========================================
-// 🟢 NEW ENDPOINT: Change Password (Logged-in Users)
-// ==========================================
-app.post("/api/auth/change-password", authenticateToken, async (req, res) => {
-  try {
-    const { currentPassword, newPassword } = req.body;
-    const userId = req.user.id; // authenticateToken middleware se aayega
-
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    // Purana password check karo
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: "Incorrect current password" });
-    }
-
-    // Naya password hash karke save karo
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-    user.password = hashedPassword;
-    await user.save();
-
-    res.status(200).json({ message: "Password updated successfully!" });
-  } catch (error) {
-    console.error("Change password error:", error);
-    res.status(500).json({ error: "Server error during password change" });
-  }
-});
-// ==========================================
 
 // 🟢 Save/Update Room in History
 app.post("/api/rooms/save", authenticateToken, async (req, res) => {
@@ -548,7 +299,6 @@ io.on("connection", (socket) => {
     socket.in(roomId).emit("panel_switch", { panel });
   });
 
-  // 🌟 YAHAN CHANGE KIYA HAI: Ab ye "sync_workspace" emit karega, naye data structure ke sath
   socket.on(ACTIONS.SYNC_CODE, ({ socketId, code, files, activeFileId }) => {
     io.to(socketId).emit("sync_workspace", { code, files, activeFileId });
   });
